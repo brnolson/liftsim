@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  simulation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure (simulation core only)
+        run: cmake -B build -DLIFTSIM_BUILD_APP=OFF
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Verification tests
+        run: ./build/liftsim_tests
+      - name: Traffic study
+        run: ./build/liftsim_kpi

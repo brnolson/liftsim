@@ -1,4 +1,5 @@
 #include "ui/Hud.h"
+#include "ui/References.h"
 #include "view/Palette.h"
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,7 @@ const glm::vec3 kWarn{1.00f, 0.78f, 0.25f};
 const glm::vec3 kBad{1.00f, 0.32f, 0.28f};
 const glm::vec3 kSpeedLine{0.30f, 0.80f, 1.00f};
 const glm::vec3 kAccelLine{1.00f, 0.60f, 0.25f};
+const glm::vec3 kLinkColor{0.45f, 0.72f, 1.00f};
 constexpr float kLine = 20.0f;          // text line height in pixels
 constexpr float kTraceSeconds = 20.0f;
 
@@ -58,7 +60,8 @@ void Hud::Panel(float x, float y, float w, float h) {
 }
 
 void Hud::Draw(const sim::ElevatorSystem& system, const BuildingLayout& layout, const HudState& state,
-               const glm::mat4& viewProj, int width, int height) {
+               const Inspector& inspector, const glm::mat4& viewProj, int width, int height) {
+    m_links.clear();
     m_text.BeginFrame(width, height);
     m_title.BeginFrame(width, height);
 
@@ -68,10 +71,72 @@ void Hud::Draw(const sim::ElevatorSystem& system, const BuildingLayout& layout, 
     DrawHeader(system, state, 16.0f, top);
     float tableBottom = DrawFleetTable(system, state, 16.0f, top - 118.0f);
     DrawKpis(system, 16.0f, tableBottom - 16.0f);
-    DrawCarDetail(system.Cars()[state.selectedCar], static_cast<float>(width) - 436.0f, top);
+
+    if (inspector.Active()) {
+        // Leader line from the card to the component on screen.
+        glm::vec3 target = inspector.CameraShot(system, layout, state.selectedCar).target;
+        glm::vec4 clip = viewProj * glm::vec4(target, 1.0f);
+        glm::vec2 anchor((clip.x / clip.w * 0.5f + 0.5f) * width, (clip.y / clip.w * 0.5f + 0.5f) * height);
+        bool onScreen = clip.w > 0.0f;
+        DrawInspectorCard(inspector.Describe(system, layout, state.selectedCar), onScreen ? &anchor : nullptr,
+                          static_cast<float>(width) - 596.0f, top);
+    } else {
+        DrawCarDetail(system.Cars()[state.selectedCar], static_cast<float>(width) - 436.0f, top);
+    }
+    if (state.showReferences) DrawReferences(width, height);
     DrawControls(width, 14.0f);
 
     m_text.EndFrame();
+}
+
+const char* Hud::LinkAt(float x, float y) const {
+    for (const Link& link : m_links)
+        if (x >= link.x0 && x <= link.x1 && y >= link.y0 && y <= link.y1) return link.url;
+    return nullptr;
+}
+
+void Hud::DrawSourceLink(const char* id, float x, float y, float maxWidth) {
+    const Reference* ref = FindReference(id);
+    if (!ref) return;
+    std::string text = Fmt("[%s] %s", ref->id, ref->citation);
+    while (text.size() > 8 && m_text.MeasureText(text, 1.0f) > maxWidth) text = text.substr(0, text.size() - 4) + "...";
+    float w = m_text.MeasureText(text, 1.0f);
+    m_text.DrawText(text, x, y, 1.0f, kLinkColor);
+    m_text.DrawLine(x, y - 3.0f, x + w, y - 3.0f, 1.0f, kLinkColor, 0.6f);
+    m_links.push_back({x, y - 5.0f, x + w, y + 14.0f, ref->url});
+}
+
+void Hud::DrawInspectorCard(const Inspector::Card& card, const glm::vec2* anchor, float x, float y) {
+    const float w = 580.0f;
+    const float h = 118.0f + kLine * (card.about.size() + card.live.size() + card.sources.size());
+    if (anchor) {
+        glm::vec2 from(x, y - 40.0f);
+        m_text.DrawLine(from.x, from.y, anchor->x, anchor->y, 2.0f, kWarn, 0.9f);
+        m_text.DrawRectOutline(anchor->x - 9.0f, anchor->y - 9.0f, 18.0f, 18.0f, 2.0f, kWarn, 1.0f);
+    }
+    Panel(x, y - h, w, h);
+    m_title.DrawText(card.title, x + 14.0f, y - 34.0f, 0.75f, kWarn);
+    m_text.DrawText("Tab / Shift+Tab: next component   Esc: close", x + 14.0f, y - 54.0f, 0.85f, kDim);
+
+    float ly = y - 78.0f;
+    for (const std::string& line : card.about) { m_text.DrawText(line, x + 14.0f, ly, 1.0f, kWhite); ly -= kLine; }
+    ly -= 6.0f;
+    for (const std::string& line : card.live) { m_text.DrawText(line, x + 14.0f, ly, 1.0f, kGood); ly -= kLine; }
+    ly -= 6.0f;
+    m_text.DrawText(card.equation, x + 14.0f, ly, 1.0f, kSpeedLine);
+    ly -= kLine;
+    for (const char* id : card.sources) { DrawSourceLink(id, x + 14.0f, ly, w - 28.0f); ly -= kLine; }
+}
+
+void Hud::DrawReferences(int width, int height) {
+    const int count = static_cast<int>(sizeof(kReferences) / sizeof(kReferences[0]));
+    const float w = 900.0f, h = 70.0f + kLine * count;
+    const float x = (width - w) * 0.5f, y = height * 0.5f + h * 0.5f;
+    Panel(x, y - h, w, h);
+    m_title.DrawText("Engineering references", x + 14.0f, y - 34.0f, 0.75f, kWhite);
+    m_text.DrawText("click to open   I: close", x + w - 200.0f, y - 30.0f, 0.9f, kDim);
+    float ly = y - 58.0f;
+    for (const Reference& ref : kReferences) { DrawSourceLink(ref.id, x + 14.0f, ly, w - 28.0f); ly -= kLine; }
 }
 
 void Hud::DrawHeader(const sim::ElevatorSystem& system, const HudState& state, float x, float y) {
@@ -219,7 +284,7 @@ void Hud::DrawMotionTrace(float x, float y, float w, float h) {
 void Hud::DrawControls(int width, float y) {
     const char* help =
         "LMB drag orbit | RMB drag pan | Wheel zoom | Click car: select, click floor: call | "
-        "F1-F5 views | 1-9 car | F follow | Space pause | [ ] speed | T traffic | +/- rate | "
+        "Tab inspect components | I references | F1-F5 views | 1-9 car | F follow | Space pause | [ ] speed | T traffic | +/- rate | "
         "O drive fault | R reset | X x-ray | G reflections | J shadows | K outlines | H hide HUD";
     float w = m_text.MeasureText(help, 0.85f);
     float x = std::max(8.0f, (width - w) * 0.5f);

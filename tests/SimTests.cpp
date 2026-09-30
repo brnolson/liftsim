@@ -1,5 +1,6 @@
-// Unit tests for the simulation core. The core has no graphics dependency, so
-// it can be verified headless and deterministically (fixed seed, fixed step).
+// Verification tests for the simulation core. Each test verifies one or more
+// requirements in docs/REQUIREMENTS.md (IDs in the test names). The core has no
+// graphics dependency, so it runs headless and deterministically.
 // Run:  ./build/liftsim_tests
 
 #include "sim/ElevatorSystem.h"
@@ -33,7 +34,7 @@ int main() {
     const MotionLimits limits{spec.ratedSpeed, spec.maxAccel, spec.maxJerk,
                               spec.levelingSpeed, spec.stopTolerance};
 
-    Test("Every trip respects speed, acceleration and jerk limits and levels within +/-10 mm", [&] {
+    Test("REQ-MOT-01/02/03  Every trip within speed, accel and jerk limits; levels within +/-10 mm; no overshoot", [&] {
         for (int floors = 1; floors < building.floorCount; ++floors) {
             for (int dir : {1, -1}) {
                 float start = dir > 0 ? 0.0f : building.TravelHeight();
@@ -60,7 +61,7 @@ int main() {
         }
     });
 
-    Test("Dispatcher flight-time estimate is within 25% of the simulated run", [&] {
+    Test("REQ-DSP-01  Dispatcher flight-time estimate within 25% of the simulated run", [&] {
         for (int floors : {1, 3, 8, 24}) {
             MotionController m(limits);
             m.Reset(0.0f);
@@ -72,7 +73,7 @@ int main() {
         }
     });
 
-    Test("Doors reopen when the light curtain is interrupted while closing", [&] {
+    Test("REQ-DOR-01  Doors reverse when the light curtain is interrupted while closing", [&] {
         DoorOperator doors(spec.doorOpenTime, spec.doorCloseTime);
         doors.Open();
         for (int i = 0; i < 300; ++i) doors.Update(kDt, false);
@@ -84,7 +85,7 @@ int main() {
         CHECK(doors.ReopenCount() == 1);
     });
 
-    Test("Car refuses to run while the safety chain is open (doors unlocked)", [&] {
+    Test("REQ-SAF-01  Car cannot start while the safety chain is open (doors unlocked)", [&] {
         Car car(0, spec, building);
         car.OpenDoors();
         car.Update(kDt);
@@ -93,7 +94,7 @@ int main() {
         CHECK(!car.IsRunning());
     });
 
-    Test("Overspeed governor trips at 115% and the safety gear stops the car", [&] {
+    Test("REQ-SAF-02  Overspeed governor trips at 115% and the safety gear stops the car", [&] {
         Car car(0, spec, building);
         car.InjectDriveFault();
         float peak = 0.0f;
@@ -105,7 +106,7 @@ int main() {
         CHECK(peak < 1.2f * spec.ratedSpeed);
     });
 
-    Test("Unintended car movement with doors open is detected and stopped", [&] {
+    Test("REQ-SAF-03  Unintended car movement with doors open is detected and stopped", [&] {
         Car car(0, spec, building);
         car.OpenDoors();
         for (int i = 0; i < 120; ++i) car.Update(kDt);
@@ -116,7 +117,7 @@ int main() {
         CHECK(std::abs(car.Position()) < 0.5f);
     });
 
-    Test("Ropes never slip: tension ratio stays under the traction limit at full load", [&] {
+    Test("REQ-TRC-01  Ropes never slip: tension ratio under e^(f*alpha) at full load", [&] {
         ElevatorSystem system(building, spec, 7);
         system.Traffic().SetRate(0.0f);
         for (int i = 0; i < spec.capacityPersons; ++i) system.AddPassenger(0, building.floorCount - 1);
@@ -129,7 +130,25 @@ int main() {
         CHECK(worstRatio < 1.0f);
     });
 
-    Test("Idle counterweighted car regenerates energy when running up empty", [&] {
+    Test("REQ-TRC-02  Compensation chains cancel the hoist-rope imbalance over the full travel", [&] {
+        auto imbalanceSwing = [&](bool compensated) {
+            ElevatorSpec s = spec;
+            s.compensated = compensated;
+            Car bottom(0, s, building), top(0, s, building);
+            float atBottom = bottom.Suspension().carSideKg - bottom.Suspension().cwtSideKg;
+            top.StartRun(building.floorCount - 1);
+            for (int i = 0; i < 120 * 60 && top.IsRunning(); ++i) top.Update(kDt);
+            float atTop = top.Suspension().carSideKg - top.Suspension().cwtSideKg;
+            return std::abs(atBottom - atTop);
+        };
+        float uncompensated = imbalanceSwing(false);
+        float compensated = imbalanceSwing(true);
+        std::printf("       imbalance swing: %.0f kg uncompensated, %.0f kg compensated\n", uncompensated, compensated);
+        CHECK(uncompensated > 400.0f);      // 6 ropes x 0.58 kg/m x 2 x 86 m
+        CHECK(compensated < 60.0f);         // only the traveling cable remains
+    });
+
+    Test("REQ-ENG-01  An empty car running up regenerates energy", [&] {
         ElevatorSystem system(building, spec, 3);
         system.Traffic().SetRate(0.0f);
         system.AddPassenger(building.floorCount - 1, 0);   // car travels up empty to fetch them
@@ -139,7 +158,7 @@ int main() {
         CHECK(regen > 0.0f);
     });
 
-    Test("Every passenger is delivered to the right floor (up-peak, 120 people)", [&] {
+    Test("REQ-DSP-02  Every passenger is delivered to the right floor (up-peak, 120 people)", [&] {
         ElevatorSystem system(building, spec, 11);
         system.Traffic().SetRate(0.0f);
         for (int i = 0; i < 120; ++i) system.AddPassenger(0, 1 + i % (building.floorCount - 1));
@@ -148,7 +167,7 @@ int main() {
         for (const Passenger& p : system.Passengers()) CHECK(p.state == PassengerState::Arrived);
     });
 
-    Test("Mixed traffic for one simulated hour: nobody stranded, cars never over capacity", [&] {
+    Test("REQ-DSP-03  One simulated hour of mixed traffic: nobody stranded, no car overloaded", [&] {
         ElevatorSystem system(building, spec, 5);
         system.Traffic().SetPattern(TrafficPattern::Lunch);
         system.Traffic().SetRate(90.0f);

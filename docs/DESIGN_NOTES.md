@@ -36,12 +36,13 @@
 
 ## Verification
 
-`tests/SimTests.cpp` checks the requirements that matter for an elevator:
+Requirements are listed with their sources in [REQUIREMENTS.md](REQUIREMENTS.md). `tests/SimTests.cpp` verifies each one by ID, and CI runs the tests on every push. The tests check:
 
 - the motion limits and leveling accuracy for every possible trip in both directions;
 - safety interlocks (no motion with doors open);
 - governor and UCM trips on injected faults;
-- no rope slip at full load;
+- no rope slip at full load, using the geometric wrap angle;
+- compensation chains cancelling the rope imbalance;
 - energy regeneration;
 - passenger conservation over an hour of mixed traffic (nobody stranded, no overload).
 

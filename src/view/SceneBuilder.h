@@ -57,6 +57,7 @@ private:
     void AddMachine(const sim::Car& car, std::vector<DrawItem>& items) const;
     void AddLandings(const sim::ElevatorSystem& system, bool xray, std::vector<DrawItem>& items) const;
     void AddTravelingCable(const sim::Car& car, std::vector<DrawItem>& items) const;
+    void AddPit(const sim::Car& car, std::vector<DrawItem>& items) const;
 
     DrawItem Box(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
                  Material material = Material::Matte) const;

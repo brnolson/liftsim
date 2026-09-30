@@ -26,7 +26,7 @@ Car::Car(int id, const ElevatorSpec& spec, const BuildingSpec& building)
       m_doors(spec.doorOpenTime, spec.doorCloseTime) {
     carCalls.assign(building.floorCount, false);
     m_motion.Reset(0.0f);
-    m_traction.tractionLimit = std::exp(spec.grooveFriction * spec.wrapAngle);
+    m_traction.tractionLimit = std::exp(spec.grooveFriction * spec.TractionWrapAngle());
 }
 
 void Car::Update(float dt) {
@@ -65,20 +65,48 @@ void Car::UpdateSafety() {
 // Traction physics (1:1 roping, car and counterweight hang on either side of
 // the drive sheave). Positive acceleration = car accelerating upward.
 // ---------------------------------------------------------------------------
+SuspensionLoads Car::Suspension() const {
+    const float y = Position();
+    const float travel = m_building.TravelHeight();
+    const float rope = m_spec.HoistRopeMassPerM();
+    const float chain = m_spec.compensated ? m_spec.compensationMassPerM : 0.0f;
+
+    // Hoist rope hangs from the sheave down to the car (long when the car is
+    // low) and down to the counterweight (long when the car is high).
+    float ropeCarSide = rope * (m_spec.ropeHeadroom + travel - y);
+    float ropeCwtSide = rope * (m_spec.ropeHeadroom + y);
+    // Compensation chain hangs from the underside of each into the pit, so it
+    // mirrors the rope: long under the car when the car is high.
+    float chainCarSide = chain * (m_spec.pitLoopDepth + y);
+    float chainCwtSide = chain * (m_spec.pitLoopDepth + travel - y);
+    // The traveling cable hangs in a U-loop of fixed length from mid-hoistway;
+    // the car carries the leg down to the bottom of the loop, which lengthens
+    // at half the car's travel (geometry in SceneBuilder::AddTravelingCable).
+    float cableOnCar = m_spec.travelingCableMassPerM * 0.5f * (y + 1.0f);
+
+    SuspensionLoads s;
+    s.carSideKg = m_spec.carMassKg + m_loadKg + ropeCarSide + chainCarSide + cableOnCar;
+    s.cwtSideKg = m_spec.CounterweightMassKg() + ropeCwtSide + chainCwtSide;
+    s.movingKg = s.carSideKg + s.cwtSideKg + m_spec.rotatingMassKg;
+    return s;
+}
+
 void Car::UpdateTraction(float dt) {
     float a = Acceleration();
     float v = Velocity();
-    float carSide = m_spec.carMassKg + m_loadKg;
-    float cwtSide = m_spec.CounterweightMassKg();
+    SuspensionLoads s = Suspension();
 
     // Rope tension on each side of the sheave. The counterweight accelerates
     // in the opposite direction to the car.
-    float tensionCar = carSide * (kGravity + a);
-    float tensionCwt = cwtSide * (kGravity - a);
+    float tensionCar = s.carSideKg * (kGravity + a);
+    float tensionCwt = s.cwtSideKg * (kGravity - a);
 
     // The machine supplies the difference, plus the force to spin up the
     // rotating parts (expressed as an equivalent mass at the rope).
     float force = tensionCar - tensionCwt + m_spec.rotatingMassKg * a;
+    m_traction.imbalanceKg = s.carSideKg - s.cwtSideKg;
+    m_traction.tensionCarN = tensionCar;
+    m_traction.tensionCwtN = tensionCwt;
     float mechanicalPowerW = force * v;
 
     float r = m_spec.SheaveRadius();
@@ -134,10 +162,8 @@ void Car::InjectDriveFault() {
 
     // With motor torque and brake lost, the system freewheels toward the
     // heavier side: an empty car rises because the counterweight outweighs it.
-    float carSide = m_spec.carMassKg + m_loadKg;
-    float cwtSide = m_spec.CounterweightMassKg();
-    float totalMass = carSide + cwtSide + m_spec.rotatingMassKg;
-    float accel = (cwtSide - carSide) * kGravity / totalMass;
+    SuspensionLoads s = Suspension();
+    float accel = (s.cwtSideKg - s.carSideKg) * kGravity / s.movingKg;
 
     // Near balance the drift is very slow; enforce a minimum so the governor
     // still trips within a few seconds.

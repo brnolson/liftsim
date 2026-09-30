@@ -8,14 +8,9 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-include(cmake/Dependencies.cmake)   # SDL2 + GLM
-
-# --- Third-party code committed to the repo ---------------------------------
-add_library(glad STATIC external/glad/src/glad.c)
-target_include_directories(glad PUBLIC external/glad/include)
-
-add_library(stb STATIC external/stb/stb_impl.cpp)
-target_include_directories(stb PUBLIC external/stb)
+# The simulation core and its tests have no third-party dependencies.
+# Configure with -DLIFTSIM_BUILD_APP=OFF to build only those (used by CI).
+option(LIFTSIM_BUILD_APP "Build the OpenGL application" ON)
 
 # --- Simulation core: plain C++, no graphics, fully unit-testable -----------
 add_library(liftsim_core STATIC
@@ -28,9 +23,20 @@ add_library(liftsim_core STATIC
 target_include_directories(liftsim_core PUBLIC src)
 target_compile_options(liftsim_core PRIVATE -Wall -Wextra)
 
+if(LIFTSIM_BUILD_APP)
+include(cmake/Dependencies.cmake)   # SDL2 + GLM
+
+# --- Third-party code committed to the repo ---------------------------------
+add_library(glad STATIC external/glad/src/glad.c)
+target_include_directories(glad PUBLIC external/glad/include)
+
+add_library(stb STATIC external/stb/stb_impl.cpp)
+target_include_directories(stb PUBLIC external/stb)
+
 # --- Real-time application ---------------------------------------------------
 add_executable(LiftSim
     src/main.cpp
+    src/app/Application.cpp
     src/render/Shader.cpp
     src/render/Mesh.cpp
     src/render/OrbitCamera.cpp
@@ -40,6 +46,7 @@ add_executable(LiftSim
     src/view/PeopleView.cpp
     src/ui/TextRenderer.cpp
     src/ui/Hud.cpp
+    src/ui/Inspector.cpp
 )
 target_include_directories(LiftSim PRIVATE src)
 target_link_libraries(LiftSim PRIVATE liftsim_core glad stb glm::glm SDL2::SDL2-static SDL2::SDL2main opengl32)
@@ -52,6 +59,7 @@ endif()
 add_custom_command(TARGET LiftSim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:LiftSim>/assets)
+endif()
 
 # --- Tests -------------------------------------------------------------------
 enable_testing()

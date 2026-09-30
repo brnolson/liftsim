@@ -10,7 +10,10 @@ This document explains the models in `src/sim/`, the equations they use and wher
 | Cars | 4, rated 1600 kg / 21 persons | 75 kg design mass per person |
 | Rated speed | 2.5 m/s | typical for 20–30 storey offices |
 | Acceleration / jerk | 1.0 m/s² / 1.5 m/s³ | typical comfort limits for offices |
-| Machine | gearless PM synchronous, 640 mm sheave, 1:1 roping | deflector sheave spaces the ropes |
+| Machine | gearless PM synchronous, 640 mm sheave, 1:1 roping, single wrap | 520 mm deflector sheave spaces the ropes |
+| Hoist ropes | 6 × 13 mm steel, 0.58 kg/m each | 3.5 kg/m in total |
+| Compensation | chains, 3.48 kg/m | chains are usual up to ~2.5 m/s |
+| Buffers | oil (energy-dissipating) | 0.42 m stroke |
 | Counterweight | car mass + 45 % of rated load | balances the car at ~45 % load |
 
 ## 2. Motion control (`MotionController`)
@@ -40,12 +43,21 @@ A real elevator drive does not "teleport to the next floor". It follows a speed 
 With 1:1 roping, the car and counterweight hang on opposite sides of the traction sheave and accelerate in opposite directions. With car acceleration *a* (positive up):
 
 ```
-T_car = (m_car + m_load) · (g + a)          rope tension, car side
-T_cwt =  m_cwt           · (g − a)          rope tension, counterweight side
+T_car = M_car_side · (g + a)                rope tension, car side
+T_cwt = M_cwt_side · (g − a)                rope tension, counterweight side
 F     = T_car − T_cwt + m_rot · a           force the machine supplies at the sheave rim
 τ     = F · r                                machine torque
 P     = F · v                                mechanical power (+ motoring, − regenerating)
 ```
+
+`M_car_side` and `M_cwt_side` are everything hanging from each side of the sheave at the current car position (`Car::Suspension`):
+
+```
+M_car_side = m_car + m_load + ρ_rope·(h + H − y) + ρ_chain·(p + y) + cable
+M_cwt_side = m_cwt          + ρ_rope·(h + y)     + ρ_chain·(p + H − y)
+```
+
+Here H is the travel (86.4 m), y the car position, h the rope length above the car at the top landing, and p the chain loop depth. Without compensation the hoist ropes alone swing the balance by 2·ρ·H ≈ **600 kg** over the travel. That is why rope weight must be compensated above roughly 30–40 m of travel. With chains of the same linear mass, the terms in y cancel, and a unit test checks that the swing drops from 554 kg to 48 kg (the remaining 48 kg is the traveling cable).
 
 `m_rot` is the rotating inertia of the motor and sheaves, expressed as an equivalent mass at the rope. Electrical power divides motoring power by the drive efficiency and multiplies regenerated power by it. As a result:
 
@@ -58,7 +70,20 @@ P     = F · v                                mechanical power (+ motoring, − 
 T_high / T_low  ≤  e^(μ·α)
 ```
 
-where μ is the effective groove friction (0.2 for an undercut groove) and α is the wrap angle (π rad). The HUD shows the live ratio against this limit, and a unit test checks that a fully loaded car accelerating at the limit never slips.
+where f is the effective groove friction (0.2 for an undercut groove) and α is the wrap angle. EN 81-50 uses this same inequality for traction calculations.
+
+**The wrap angle is computed from the roping geometry** (`ElevatorSpec::RopeTangentAngle`), not assumed to be 180°:
+
+- The car rope drops from the front of the traction sheave. The counterweight rope drops from the far side of a deflector sheave 2.0 m below and 1.45 m behind it.
+- Between the two sheaves the rope runs on their external tangent. For tangent points `P = C + r·n` on both circles, `(C_sheave − C_deflector)·n = −(r_sheave − r_deflector)`.
+- Solving that gives a wrap of **158°**, typical for a single-wrap machine with a deflector, and a traction limit of e^(0.2·2.76) = 1.74.
+- The renderer draws the ropes along the same tangent, so the picture and the physics agree.
+
+The HUD and inspector show the live ratio against this limit. A unit test checks that a fully loaded car accelerating at the limit never slips.
+
+## 3b. Pit buffers
+
+Energy-dissipating (oil) buffers must have a stroke of at least `0.0674·v²`. That is the distance to stop from 115 % of rated speed at an average of 1 g: `(1.15v)² / (2g) = 0.0674·v²`. At 2.5 m/s this is **0.42 m**, and the buffers in the pit are drawn with that plunger stroke.
 
 ## 4. Doors (`DoorOperator`)
 
@@ -114,13 +139,29 @@ Passengers arrive as a **Poisson process**: the time between arrivals is exponen
 | Lunch | 40 % | 40 % | 20 % |
 | Interfloor | 10 % | 10 % | 80 % |
 
-## 8. Sources
+## 8. How accurate is it?
 
-- **EN 81-20:2020.** *Safety rules for the construction and installation of lifts, Part 20: Passenger and goods passenger lifts.* Source for the governor tripping speed (≥ 115 % rated), progressive safety gear retardation (0.2 g–1.0 g), stopping accuracy (±10 mm), unintended car movement protection, and the 75 kg design mass per person.
-- **ASME A17.1 / CSA B44.** *Safety Code for Elevators and Escalators.* The North American counterpart.
-- **CIBSE Guide D: Transportation Systems in Buildings** (Chartered Institution of Building Services Engineers, 2020). Flight-time formula, passenger transfer times, traffic patterns, handling-capacity targets.
-- **G. Barney and L. Al-Sharif, *Elevator Traffic Handbook: Theory and Practice*, 2nd ed., Routledge, 2016.** Traffic patterns, round-trip time, group control.
-- **R. D. Peters, "Ideal Lift Kinematics", *Elevator Technology 6*, IAEE, 1995.** Equations of motion for jerk-limited lift travel.
-- **Euler–Eytelwein (capstan) equation.** Standard mechanics result for belt and rope friction.
+| Area | Status |
+|---|---|
+| Motion (S-curve, limits, leveling) | Matches the ideal-kinematics equations; verified for every trip. |
+| Traction forces, torque, power, regeneration | First-principles, with rope, chain and cable masses included. |
+| Rope slip check | Euler–Eytelwein with the geometric wrap angle (the EN 81-50 method in simplified form: constant f, no groove-geometry derivation). |
+| Governor, safety gear, UCM, buffers | Thresholds from EN 81-20; the safety gear is modelled as a constant average retardation. |
+| Doors | Timings and behaviour typical; the eased panel profile stands in for a real operator's motion profile. |
+| Dispatch | ETA assignment with collective control. Real products use proprietary algorithms (destination dispatch, learning). |
+| **Not modelled** | Rope elasticity and car bounce, 2:1 roping, motor/inverter electrical dynamics, pre-torque load weighing, ride vibration, door kinetic-energy limits, building sway. |
 
-Numbers are typical values taken from these references for an educational model. They are not certified design values.
+Parameter values are typical figures from the references below. This is an educational model, not a certified design tool.
+
+## 9. Sources
+
+These are also listed in the app: press **I**, or open a component with **Tab**. Clicking a source opens it.
+
+- **[EN 81-20:2020](https://www.evs.ee/en/evs-en-81-20-2020)**, *Safety rules for lifts, Part 20.* Governor tripping speed (≥ 115 % rated), safety gear retardation (0.2 g–1.0 g), stopping accuracy (±10 mm), UCM protection, buffer stroke (0.0674 v²), 75 kg per person.
+- **[ASME A17.1-2022 / CSA B44-22](https://webstore.ansi.org/standards/csa/csaasmea172022b44)**, *Safety Code for Elevators and Escalators.* The North American counterpart.
+- **[CIBSE Guide D, 5th ed. (2020)](https://www.cibsejournal.com/news/fifth-edition-of-guide-d-launched/)**, *Transportation Systems in Buildings.* Flight time, transfer times, traffic patterns, handling capacity.
+- **[R. D. Peters, *Ideal Lift Kinematics* (1995)](https://liftescalatorlibrary.org/paper_indexing/abstract_pages/00000329.html).** Jerk-limited equations of motion.
+- **[G. Barney & L. Al-Sharif, *Elevator Traffic Handbook*, 2nd ed. (2016)](https://www.routledge.com/Elevator-Traffic-Handbook-Theory-and-Practice/Barney-Al-Sharif/p/book/9781032179650).** Traffic analysis, round-trip time, group control.
+- **[L. Wiek, *On Friction for Traction of Elevators* (1996)](https://liftescalatorlibrary.org/paper_indexing/abstract_pages/00000362.html)** and **[Theory of Rope Traction, Elevator World](https://elevatorworld.com/?p=26460).** Euler–Eytelwein traction.
+- **[US 8,360,212 B2](https://patents.google.com/patent/US8360212).** "a travel height of just 30–40 meters necessitates compensation of the imbalance."
+- **[Oleo International: elevator buffers](https://www.oleoelevator.com/elevator-safety/).** Buffer strokes and energy absorption.

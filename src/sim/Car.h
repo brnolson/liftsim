@@ -19,8 +19,18 @@ struct SafetyChain {
     bool Complete() const { return doorsLocked && governorOk && ucmOk; }
 };
 
+// Everything hanging from each side of the traction sheave at the current car
+// position (car or counterweight, hoist ropes, compensation, traveling cable).
+struct SuspensionLoads {
+    float carSideKg = 0.0f;
+    float cwtSideKg = 0.0f;
+    float movingKg  = 0.0f;   // all mass that accelerates with the car, incl. rotating parts
+};
+
 // Forces, torque and power at the traction sheave for the current instant.
 struct TractionState {
+    float tensionCarN   = 0.0f;  // rope tension on the car side of the sheave
+    float tensionCwtN   = 0.0f;  // rope tension on the counterweight side
     float ropeForceN    = 0.0f;  // net force the machine applies at the sheave rim
     float torqueNm      = 0.0f;
     float powerKw       = 0.0f;  // positive = motoring, negative = regenerating
@@ -28,6 +38,7 @@ struct TractionState {
     float sheaveRpm     = 0.0f;
     float tensionRatio  = 1.0f;  // T_high / T_low across the sheave
     float tractionLimit = 1.0f;  // e^(mu*alpha): above this ratio the ropes slip
+    float imbalanceKg   = 0.0f;  // car side minus counterweight side, static
 };
 
 enum class CarMode { Idle, Running, DoorsOpening, DoorsOpen, DoorsClosing, OutOfService };
@@ -62,6 +73,7 @@ public:
     // ("advanced car position" in dispatching literature).
     int   CommittedFloor() const;
     bool  CanStopAt(int floor) const;
+    SuspensionLoads Suspension() const;
     float LastStopErrorMm() const { return m_motion.LastStopError() * 1000.0f; }
 
     // --- Load ---

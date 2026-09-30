@@ -9,9 +9,10 @@
 // The landing door line of the elevator bank is the plane z = 0; hoistways
 // extend behind it (z < 0) and the landing corridor lies in front (z > 0).
 struct BuildingLayout {
-    explicit BuildingLayout(const sim::BuildingSpec& spec);
+    BuildingLayout(const sim::BuildingSpec& spec, const sim::ElevatorSpec& elevator);
 
     sim::BuildingSpec spec;
+    sim::ElevatorSpec elevator;
 
     // Hoistways
     float shaftPitch   = 2.9f;    // center-to-center spacing of adjacent cars
@@ -24,7 +25,7 @@ struct BuildingLayout {
     float cwtWidth     = 1.1f;
     float cwtDepth     = 0.3f;
     float cwtHeight    = 2.6f;
-    float cwtCenterZ   = -2.35f;
+    float cwtCenterZ;             // derived from the roping geometry
     float carRailOffset = 1.2f;   // car guide rails at shaftX +/- this
     float pitDepth     = 1.8f;
 
@@ -44,10 +45,12 @@ struct BuildingLayout {
     // Counterweight travels opposite to the car (1:1 roping).
     float CounterweightBottomY(float carY) const;
     // Traction sheave: ropes leave its front edge straight down to the car hitch.
-    float SheaveRadius() const { return 0.32f; }
+    float SheaveRadius() const { return elevator.SheaveRadius(); }
+    float DeflectorRadius() const { return elevator.DeflectorRadius(); }
+    float GovernorRadius() const { return 0.16f; }
     glm::vec3 SheaveCenter(int car) const;
     glm::vec3 DeflectorCenter(int car) const;
-    float DeflectorRadius() const;
+    glm::vec3 GovernorCenter(int car) const;
 
     AABB CarBounds(int car, float carY) const;
     AABB CounterweightBounds(int car, float carY) const;

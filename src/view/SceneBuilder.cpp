@@ -135,7 +135,7 @@ void SceneBuilder::BuildStatic() {
     m_staticRayBoxes.push_back({{backCenter - backSize * 0.5f, backCenter + backSize * 0.5f}, kHoistwayWall});
     AddStatic({0.0f, -L.pitDepth - 0.15f, L.backZ * 0.5f}, {2.0f * B, 0.3f, hoistwayDepth}, kSlab);
 
-    // Car guide rails and pit buffers for each hoistway.
+    // Car and counterweight guide rails for each hoistway.
     for (int c = 0; c < L.spec.carCount; ++c) {
         float x = L.ShaftX(c);
         float railHeight = roofY + L.pitDepth;
@@ -144,8 +144,6 @@ void SceneBuilder::BuildStatic() {
             AddStatic({x + side * L.carRailOffset, railY, L.carCenterZ}, {0.06f, railHeight, 0.12f}, kRail);
             AddStatic({x + side * (L.cwtWidth * 0.5f + 0.1f), railY, L.cwtCenterZ}, {0.05f, railHeight, 0.08f}, kRail);
         }
-        AddStatic({x, -L.pitDepth + 0.45f, L.carCenterZ}, {0.3f, 0.9f, 0.3f}, kGovernor);    // car buffer
-        AddStatic({x, -L.pitDepth + 0.3f, L.cwtCenterZ}, {0.25f, 0.6f, 0.25f}, kGovernor);   // counterweight buffer
     }
 
     // Roof slab, left open above the hoistways so the ropes can be followed down.
@@ -153,8 +151,10 @@ void SceneBuilder::BuildStatic() {
     glm::vec3 roofSize(2.0f * W + 0.4f, t, L.frontZ);
     AddStatic(roofCenter, roofSize, kSlab);
     m_staticRayBoxes.push_back({{roofCenter - roofSize * 0.5f, roofCenter + roofSize * 0.5f}, kSlab});
+    m_tagArchitecture = true;
     for (float side : {-1.0f, 1.0f})
         AddStatic({side * (W + B + 0.2f) * 0.5f, roofY - t * 0.5f, L.backZ * 0.5f}, {W - B + 0.2f, t, hoistwayDepth}, kSlab);
+    m_tagArchitecture = false;
     AddStatic({0.0f, roofY + 0.5f, L.frontZ}, {2.0f * W + 0.4f, 1.0f, 0.2f}, kSpandrel);
 
     float mrHalf = B + 0.8f, mrH = L.machineRoomHeight, mrFront = 0.8f;
@@ -271,6 +271,7 @@ void SceneBuilder::Build(const sim::ElevatorSystem& system, const ViewOptions& o
         AddCounterweight(car, items);
         AddMachine(car, items);
         AddTravelingCable(car, items);
+        AddPit(car, items);
         rayBoxes.push_back({m_layout.CarBounds(car.Id(), car.Position()), kWoodPanel});
         rayBoxes.push_back({m_layout.CounterweightBounds(car.Id(), car.Position()), kCwtFiller});
     }
@@ -337,7 +338,14 @@ void SceneBuilder::AddCounterweight(const sim::Car& car, std::vector<DrawItem>& 
         items.push_back(Box({c.x + side * (size.x * 0.5f - 0.05f), c.y, c.z}, {0.1f, size.y, size.z + 0.04f}, kSteelDark));
     items.push_back(Box({c.x, box.max.y - 0.06f, c.z}, {size.x, 0.12f, size.z + 0.04f}, kSteelDark));
     items.push_back(Box({c.x, box.min.y + 0.06f, c.z}, {size.x, 0.12f, size.z + 0.04f}, kSteelDark));
-    items.push_back(Box(c, {size.x - 0.2f, size.y - 0.24f, size.z}, kCwtFiller));
+    // Stack of cast filler plates; the count sets the counterweight mass.
+    const int plates = 12;
+    float plateHeight = (size.y - 0.24f) / plates;
+    for (int i = 0; i < plates; ++i) {
+        float py = box.min.y + 0.12f + plateHeight * (i + 0.5f);
+        glm::vec3 shade = (i % 2) ? kCwtFiller : kCwtFiller * 0.85f;
+        items.push_back(Box({c.x, py, c.z}, {size.x - 0.2f, plateHeight * 0.92f, size.z}, shade));
+    }
 }
 
 void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items) const {
@@ -351,7 +359,7 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
 
     // Bedplate, motor, traction sheave (gearless machine, axis along x).
     items.push_back(Box({sheave.x, roofY + 0.2f, sheave.z}, {1.3f, 0.4f, 1.0f}, kMachine));
-    items.push_back(Segment(sheave + glm::vec3(-0.65f, 0, 0), sheave + glm::vec3(-0.15f, 0, 0), 0.42f, kMachine));
+    items.push_back(Segment(sheave + glm::vec3(0.2f, 0, 0), sheave + glm::vec3(0.7f, 0, 0), 0.42f, kMachine));
     items.push_back(Segment(sheave + glm::vec3(-0.15f, 0, 0), sheave + glm::vec3(0.15f, 0, 0), r, kSteelDark));
     items.push_back(Box({sheave.x, (roofY + 0.4f + sheave.y - 0.3f) * 0.5f, sheave.z}, {0.5f, sheave.y - roofY - 0.7f, 0.5f}, kMachine));
 
@@ -362,33 +370,48 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
         m = glm::translate(m, {faceOffset, radius * 0.65f, 0.0f});
         items.push_back({&m_meshes.cube, glm::scale(m, glm::vec3(0.03f, radius * 0.5f, 0.07f)), kGovernor, Material::Matte, false});
     };
-    spinningMark(sheave, r, tr.sheaveAngle, 0.16f);
+    spinningMark(sheave, r, tr.sheaveAngle, -0.16f);
 
-    // Brake shoes: red when applied (car stopped), grey when lifted.
+    // Brake drum between sheave and motor, gripped by two shoes: red when
+    // applied (car stopped), grey when lifted.
+    items.push_back(Segment(sheave + glm::vec3(0.15f, 0, 0), sheave + glm::vec3(0.2f, 0, 0), r * 0.85f, kStainless));
     glm::vec3 brakeColor = car.IsRunning() ? kSteelDark : kBrakeSet;
     for (float side : {-1.0f, 1.0f})
-        items.push_back(Box(sheave + glm::vec3(0.3f, 0.0f, side * (r + 0.08f)), {0.14f, 0.3f, 0.12f}, brakeColor));
+        items.push_back(Box(sheave + glm::vec3(0.175f, 0.0f, side * (r * 0.85f + 0.07f)), {0.1f, 0.3f, 0.12f}, brakeColor));
 
-    // Deflector sheave below the machine.
+    // Deflector sheave in the top of the hoistway.
     items.push_back(Segment(deflector + glm::vec3(-0.1f, 0, 0), deflector + glm::vec3(0.1f, 0, 0), rd, kSteelDark));
-    spinningMark(deflector, rd, tr.sheaveAngle * r / rd, 0.11f);
+    spinningMark(deflector, rd, tr.sheaveAngle * r / rd, -0.11f);
 
-    // Hoist ropes (three strands): sheave front edge -> car crosshead, and
-    // sheave back edge -> deflector -> counterweight.
-    const float carTop = car.Position() + L.carHeight + 0.45f;
-    const float cwtTop = L.CounterweightBottomY(car.Position()) + L.cwtHeight;
-    const float sheaveBackZ = sheave.z - r;
+    // Hoist ropes, three strands. Path from the car up: vertical to the front of
+    // the traction sheave, over its top, along the external tangent down to the
+    // deflector, over the deflector, then vertically down to the counterweight.
+    const float tangent = L.elevator.RopeTangentAngle();
+    const float carHitch = car.Position() + L.carHeight + 0.45f;
+    const float cwtHitch = L.CounterweightBottomY(car.Position()) + L.cwtHeight;
+    auto onCircle = [](const glm::vec3& c, float radius, float angle, float x) {
+        return glm::vec3(x, c.y + radius * std::sin(angle), c.z + radius * std::cos(angle));
+    };
+    auto arc = [&](const glm::vec3& c, float radius, float from, float to, float x) {
+        const int segments = 6;
+        for (int i = 0; i < segments; ++i) {
+            float a0 = from + (to - from) * i / segments, a1 = from + (to - from) * (i + 1) / segments;
+            items.push_back(Segment(onCircle(c, radius, a0, x), onCircle(c, radius, a1, x), 0.012f, kRope));
+        }
+    };
     for (float dx : {-0.07f, 0.0f, 0.07f}) {
         float x = sheave.x + dx;
-        items.push_back(Segment({x, sheave.y, L.carCenterZ}, {x, carTop, L.carCenterZ}, 0.012f, kRope));
-        items.push_back(Segment({x, sheave.y, sheaveBackZ}, {x, deflector.y, sheaveBackZ}, 0.012f, kRope));
-        items.push_back(Segment({x, deflector.y, L.cwtCenterZ}, {x, cwtTop, L.cwtCenterZ}, 0.012f, kRope));
+        items.push_back(Segment(onCircle(sheave, r, 0.0f, x), {x, carHitch, L.carCenterZ}, 0.012f, kRope));
+        arc(sheave, r, 0.0f, tangent, x);
+        items.push_back(Segment(onCircle(sheave, r, tangent, x), onCircle(deflector, rd, tangent, x), 0.012f, kRope));
+        arc(deflector, rd, tangent, sim::kPi, x);
+        items.push_back(Segment(onCircle(deflector, rd, sim::kPi, x), {x, cwtHitch, L.cwtCenterZ}, 0.012f, kRope));
     }
 
     // Overspeed governor: its rope loop is clamped to the car, so the governor
     // sheave spins at car speed. A tension pulley in the pit keeps the loop taut.
-    const float govR = 0.16f;
-    const glm::vec3 gov(sheave.x - L.carWidth * 0.5f - 0.2f, roofY + 0.55f, L.carCenterZ + 0.45f);
+    const float govR = L.GovernorRadius();
+    const glm::vec3 gov = L.GovernorCenter(car.Id());
     glm::vec3 govColor = car.Safety().governorOk ? kGovernor : kFault;
     items.push_back(Segment(gov + glm::vec3(-0.05f, 0, 0), gov + glm::vec3(0.05f, 0, 0), govR, govColor));
     spinningMark(gov, govR, car.Position() / govR, 0.06f);
@@ -429,6 +452,46 @@ void SceneBuilder::AddTravelingCable(const sim::Car& car, std::vector<DrawItem>&
         glm::vec3 p1(x, yBottom - r * std::sin(a1), L.carCenterZ - r * std::cos(a1));
         items.push_back(Segment(p0, p1, 0.03f, color));
     }
+}
+
+void SceneBuilder::AddPit(const sim::Car& car, std::vector<DrawItem>& items) const {
+    const BuildingLayout& L = m_layout;
+    const sim::ElevatorSpec& spec = L.elevator;
+    const float x = L.ShaftX(car.Id());
+    const float pitFloor = -L.pitDepth;
+
+    // Compensation chain: hangs from the underside of the car and of the
+    // counterweight and joins in a loop in the pit. Car and counterweight move
+    // in opposite directions, so the loop stays at a constant height.
+    const float chainX = x - 0.35f;
+    const float loopRadius = spec.ropeSpacing * 0.5f;
+    const glm::vec3 loopCenter(chainX, -spec.pitLoopDepth + loopRadius, (L.carCenterZ + L.cwtCenterZ) * 0.5f);
+    const float carBottom = car.Position() - 0.18f;
+    const float cwtBottom = L.CounterweightBottomY(car.Position());
+    const glm::vec3 chainColor(0.30f, 0.30f, 0.33f);
+    if (spec.compensated) {
+        items.push_back(Segment({chainX, carBottom, L.carCenterZ}, {chainX, loopCenter.y, L.carCenterZ}, 0.03f, chainColor));
+        items.push_back(Segment({chainX, cwtBottom, L.cwtCenterZ}, {chainX, loopCenter.y, L.cwtCenterZ}, 0.03f, chainColor));
+        const int segments = 10;
+        for (int i = 0; i < segments; ++i) {
+            float a0 = sim::kPi * i / segments, a1 = sim::kPi * (i + 1) / segments;
+            glm::vec3 p0 = loopCenter + glm::vec3(0.0f, -loopRadius * std::sin(a0), loopRadius * std::cos(a0));
+            glm::vec3 p1 = loopCenter + glm::vec3(0.0f, -loopRadius * std::sin(a1), loopRadius * std::cos(a1));
+            items.push_back(Segment(p0, p1, 0.03f, chainColor));
+        }
+    }
+
+    // Oil buffers under the car and counterweight. The plunger extends by the
+    // minimum stroke EN 81-20 requires for this rated speed (0.0674 v^2).
+    const float stroke = spec.BufferStroke();
+    auto buffer = [&](float z, float top) {
+        float bodyTop = top - stroke;
+        items.push_back(Segment({x, pitFloor, z}, {x, bodyTop, z}, 0.13f, kGovernor));
+        items.push_back(Segment({x, bodyTop, z}, {x, top - 0.03f, z}, 0.06f, kStainless));
+        items.push_back(Segment({x, top - 0.03f, z}, {x, top, z}, 0.11f, {0.1f, 0.1f, 0.1f}));
+    };
+    buffer(L.carCenterZ, -0.5f);    // 0.32 m run-by below the car at the bottom landing
+    buffer(L.cwtCenterZ, -0.9f);    // 0.30 m run-by below the counterweight at its lowest
 }
 
 void SceneBuilder::AddLandings(const sim::ElevatorSystem& system, bool xray, std::vector<DrawItem>& items) const {
