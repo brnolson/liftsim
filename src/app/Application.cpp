@@ -35,6 +35,7 @@ Application::Application(const LaunchOptions& options)
       m_system(m_buildingSpec, m_elevatorSpec, 2026),
       m_layout(m_buildingSpec, m_elevatorSpec),
       m_sceneBuilder(m_layout, m_meshes),
+      m_environment(m_layout, m_meshes),
       m_people(m_layout) {}
 
 Application::~Application() {
@@ -64,6 +65,8 @@ bool Application::Init() {
     std::fprintf(stderr, "OpenGL %s on %s\n", glGetString(GL_VERSION), glGetString(GL_RENDERER));
 
     m_meshes.Init();
+    m_environment.Upload();
+    std::fprintf(stderr, "Environment: %d instances\n", m_environment.InstanceCount());
     if (!m_renderer.Init(m_width, m_height) || !m_hud.Init()) {
         std::fprintf(stderr, "Failed to initialise renderer or HUD\n");
         return false;
@@ -109,6 +112,8 @@ void Application::Run() {
 
         HandleEvents();
         if (!screenshotMode) StepSimulation(frameDt);
+        m_clock += frameDt;
+        m_environment.Update(frameDt);
         m_people.Update(m_system, m_simAdvanced);
         m_hud.Record(m_system, m_state.selectedCar);
         UpdateCamera(screenshotMode ? 10.0f : frameDt);   // screenshots snap straight to the target
@@ -209,7 +214,7 @@ void Application::HandleKey(const SDL_KeyboardEvent& key) {
         if (k >= SDLK_1 && k <= SDLK_9 && k - SDLK_1 < cars) {
             m_state.selectedCar = k - SDLK_1;
             if (m_inspector.Active()) ShowInspectorShot();
-        } else if (k >= SDLK_F1 && k <= SDLK_F5) {
+        } else if (k >= SDLK_F1 && k <= SDLK_F6) {
             m_inspector.Close();
             ApplyView(k - SDLK_F1);
         }
@@ -305,6 +310,9 @@ void Application::ApplyView(int view) {
         m_state.following = true;
         m_camera.Set({m_layout.ShaftX(m_state.selectedCar), 1.5f, m_layout.carCenterZ}, 150.0f, 10.0f, 13.0f);
         break;
+    case 5:   // aerial view of the tower in its city block
+        m_camera.Set({0.0f, 30.0f, 0.0f}, -30.0f, 28.0f, 190.0f);
+        break;
     default:  // three-quarter overview of the lower floors
         m_camera.Set({0.0f, 9.0f, 0.0f}, -38.0f, 14.0f, 38.0f);
         break;
@@ -327,10 +335,14 @@ void Application::RenderFrame() {
     m_sceneBuilder.Build(m_system, viewOptions, m_items, m_rayBoxes);
     m_people.AppendDrawItems(m_meshes, m_items);
     m_people.AppendRayBoxes(m_camera.Target(), 20, m_rayBoxes);
+    m_environment.AppendRayBoxes(m_rayBoxes);
+    m_environment.CollectBatches(m_state.xray, m_batches);
 
     FrameData frame;
     frame.items = &m_items;
     frame.rayBoxes = &m_rayBoxes;
+    frame.batches = &m_batches;
+    frame.time = m_clock;
     frame.view = m_camera.View();
     frame.projection = m_camera.Projection(static_cast<float>(m_width) / std::max(m_height, 1));
     frame.cameraPos = m_camera.Position();

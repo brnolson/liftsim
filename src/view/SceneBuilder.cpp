@@ -38,8 +38,8 @@ glm::mat4 SceneBuilder::SegmentTransform(const glm::vec3& a, const glm::vec3& b,
 }
 
 DrawItem SceneBuilder::Box(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                           Material material) const {
-    return {&m_meshes.cube, BoxTransform(center, size), color, material, material != Material::Emissive};
+                           Material material, Surface surface) const {
+    return {&m_meshes.cube, BoxTransform(center, size), color, material, material != Material::Emissive, surface};
 }
 
 DrawItem SceneBuilder::Segment(const glm::vec3& a, const glm::vec3& b, float radius, const glm::vec3& color) const {
@@ -55,14 +55,14 @@ SceneBuilder::SceneBuilder(const BuildingLayout& layout, const MeshLibrary& mesh
 }
 
 void SceneBuilder::AddStatic(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                             Material material) {
-    m_static.push_back({Box(center, size, color, material), false, {}, {}, m_tagArchitecture});
+                             Material material, Surface surface) {
+    m_static.push_back({Box(center, size, color, material, surface), false, {}, {}, m_tagArchitecture});
 }
 
 void SceneBuilder::AddWall(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                           const glm::vec3& outward, Material material) {
+                           const glm::vec3& outward, Material material, Surface surface) {
     glm::vec3 outerFace = center + outward * (0.5f * glm::dot(size, glm::abs(outward)));
-    m_static.push_back({Box(center, size, color, material), true, outward, outerFace, m_tagArchitecture});
+    m_static.push_back({Box(center, size, color, material, surface), true, outward, outerFace, m_tagArchitecture});
 }
 
 void SceneBuilder::BuildStatic() {
@@ -77,13 +77,15 @@ void SceneBuilder::BuildStatic() {
 
         // Slab in front of the elevator bank (landing corridor), polished.
         glm::vec3 frontCenter(0.0f, y, L.frontZ * 0.5f), frontSize(2.0f * W, t, L.frontZ);
-        AddStatic(frontCenter, frontSize, corridorColor, Material::Polished);
+        AddStatic(frontCenter, frontSize, corridorColor, Material::Polished, Surface::Terrazzo);
         m_staticRayBoxes.push_back({{frontCenter - frontSize * 0.5f, frontCenter + frontSize * 0.5f}, corridorColor});
 
         // Slabs beside the hoistways (the hoistways themselves are open shafts).
         m_tagArchitecture = true;
+        static const glm::vec3 carpets[] = {{0.42f, 0.47f, 0.55f}, {0.52f, 0.46f, 0.42f}, {0.40f, 0.48f, 0.44f}};
         for (float side : {-1.0f, 1.0f}) {
-            AddStatic({side * (W + B) * 0.5f, y, L.backZ * 0.5f}, {W - B, t, hoistwayDepth}, kSlab);
+            AddStatic({side * (W + B) * 0.5f, y, L.backZ * 0.5f}, {W - B, t, hoistwayDepth},
+                      f == 0 ? kLobbyFloor : carpets[f % 3], Material::Matte, f == 0 ? Surface::Terrazzo : Surface::Carpet);
         }
         m_tagArchitecture = false;
         // Divider beams between adjacent hoistways, just below the next floor.
@@ -97,9 +99,9 @@ void SceneBuilder::BuildStatic() {
             float x = L.ShaftX(c), fy = L.FloorY(f);
             for (float side : {-1.0f, 1.0f}) {
                 AddStatic({x + side * (L.doorWidth * 0.5f + 0.07f), fy + L.doorHeight * 0.5f, 0.06f},
-                          {0.14f, L.doorHeight, 0.22f}, kStainless, Material::Metal);
+                          {0.14f, L.doorHeight, 0.22f}, kStainless, Material::Metal, Surface::BrushedMetal);
             }
-            AddStatic({x, fy + L.doorHeight + 0.15f, 0.06f}, {L.doorWidth + 0.42f, 0.3f, 0.26f}, kStainless, Material::Metal);
+            AddStatic({x, fy + L.doorHeight + 0.15f, 0.06f}, {L.doorWidth + 0.42f, 0.3f, 0.26f}, kStainless, Material::Metal, Surface::BrushedMetal);
             AddStatic({x, fy + 0.01f, 0.06f}, {L.doorWidth + 0.1f, 0.02f, 0.2f}, kSteelDark);   // sill
         }
         m_tagArchitecture = false;
@@ -112,7 +114,7 @@ void SceneBuilder::BuildStatic() {
             float depth = L.frontZ - L.backZ;
             float zc = (L.frontZ + L.backZ) * 0.5f;
             glm::vec3 outward(side, 0.0f, 0.0f);
-            AddWall({side * (W + 0.1f), fy + 0.35f, zc}, {0.2f, 1.2f, depth}, kSpandrel, outward);
+            AddWall({side * (W + 0.1f), fy + 0.35f, zc}, {0.2f, 1.2f, depth}, kSpandrel, outward, Material::Matte, Surface::Concrete);
             AddWall({side * (W + 0.1f), fy + 0.95f + (L.spec.floorHeight - 1.2f) * 0.5f, zc},
                     {0.12f, L.spec.floorHeight - 1.2f, depth}, kGlass, outward, Material::Metal);
         }
@@ -124,16 +126,16 @@ void SceneBuilder::BuildStatic() {
     m_tagArchitecture = true;
     for (float side : {-1.0f, 1.0f}) {
         AddWall({side * (B + 0.1f), (wallTop - L.pitDepth) * 0.5f, L.backZ * 0.5f},
-                {0.2f, wallTop + L.pitDepth, hoistwayDepth}, kHoistwayWall, {side, 0.0f, 0.0f});
+                {0.2f, wallTop + L.pitDepth, hoistwayDepth}, kHoistwayWall, {side, 0.0f, 0.0f}, Material::Matte, Surface::Concrete);
     }
     m_tagArchitecture = false;
     glm::vec3 backCenter(0.0f, (roofY - L.pitDepth) * 0.5f, L.backZ - 0.15f);
     glm::vec3 backSize(2.0f * W + 0.4f, roofY + L.pitDepth, 0.3f);
     m_tagArchitecture = true;
-    AddWall(backCenter, backSize, kHoistwayWall, {0.0f, 0.0f, -1.0f});
+    AddWall(backCenter, backSize, kHoistwayWall, {0.0f, 0.0f, -1.0f}, Material::Matte, Surface::Concrete);
     m_tagArchitecture = false;
     m_staticRayBoxes.push_back({{backCenter - backSize * 0.5f, backCenter + backSize * 0.5f}, kHoistwayWall});
-    AddStatic({0.0f, -L.pitDepth - 0.15f, L.backZ * 0.5f}, {2.0f * B, 0.3f, hoistwayDepth}, kSlab);
+    AddStatic({0.0f, -L.pitDepth - 0.15f, L.backZ * 0.5f}, {2.0f * B, 0.3f, hoistwayDepth}, kSlab, Material::Matte, Surface::Concrete);
 
     // Car and counterweight guide rails for each hoistway.
     for (int c = 0; c < L.spec.carCount; ++c) {
@@ -149,24 +151,23 @@ void SceneBuilder::BuildStatic() {
     // Roof slab, left open above the hoistways so the ropes can be followed down.
     glm::vec3 roofCenter(0.0f, roofY - t * 0.5f, L.frontZ * 0.5f);
     glm::vec3 roofSize(2.0f * W + 0.4f, t, L.frontZ);
-    AddStatic(roofCenter, roofSize, kSlab);
+    AddStatic(roofCenter, roofSize, kSlab, Material::Matte, Surface::Concrete);
     m_staticRayBoxes.push_back({{roofCenter - roofSize * 0.5f, roofCenter + roofSize * 0.5f}, kSlab});
     m_tagArchitecture = true;
     for (float side : {-1.0f, 1.0f})
-        AddStatic({side * (W + B + 0.2f) * 0.5f, roofY - t * 0.5f, L.backZ * 0.5f}, {W - B + 0.2f, t, hoistwayDepth}, kSlab);
+        AddStatic({side * (W + B + 0.2f) * 0.5f, roofY - t * 0.5f, L.backZ * 0.5f}, {W - B + 0.2f, t, hoistwayDepth}, kSlab, Material::Matte, Surface::Concrete);
     m_tagArchitecture = false;
-    AddStatic({0.0f, roofY + 0.5f, L.frontZ}, {2.0f * W + 0.4f, 1.0f, 0.2f}, kSpandrel);
+    AddStatic({0.0f, roofY + 0.5f, L.frontZ}, {2.0f * W + 0.4f, 1.0f, 0.2f}, kSpandrel, Material::Matte, Surface::Concrete);
 
     float mrHalf = B + 0.8f, mrH = L.machineRoomHeight, mrFront = 0.8f;
     float mrDepth = mrFront - L.backZ, mrZ = (mrFront + L.backZ) * 0.5f, mrY = roofY + mrH * 0.5f;
-    AddWall({0.0f, mrY, L.backZ - 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, -1});
-    AddWall({0.0f, mrY, mrFront + 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, 1});
-    AddWall({-mrHalf - 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {-1, 0, 0});
-    AddWall({mrHalf + 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {1, 0, 0});
-    AddWall({0.0f, roofY + mrH + 0.1f, mrZ}, {2.0f * mrHalf + 0.4f, 0.2f, mrDepth + 0.4f}, kSlab, {0, 1, 0});
+    AddWall({0.0f, mrY, L.backZ - 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, -1}, Material::Matte, Surface::Concrete);
+    AddWall({0.0f, mrY, mrFront + 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, 1}, Material::Matte, Surface::Concrete);
+    AddWall({-mrHalf - 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {-1, 0, 0}, Material::Matte, Surface::Concrete);
+    AddWall({mrHalf + 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {1, 0, 0}, Material::Matte, Surface::Concrete);
+    AddWall({0.0f, roofY + mrH + 0.1f, mrZ}, {2.0f * mrHalf + 0.4f, 0.2f, mrDepth + 0.4f}, kSlab, {0, 1, 0}, Material::Matte, Surface::Concrete);
     AddStatic({0.0f, roofY + mrH - 0.1f, mrZ}, {0.2f, 0.2f, mrDepth}, kSteelDark);   // hoisting beam
 
-    AddSurroundings();
 }
 
 void SceneBuilder::AddFloorInterior(int floor) {
@@ -180,75 +181,23 @@ void SceneBuilder::AddFloorInterior(int floor) {
     // Hall station column between the middle two cars (buttons are dynamic).
     float stationX = L.spec.carCount >= 2 ? (L.ShaftX(L.spec.carCount / 2 - 1) + L.ShaftX(L.spec.carCount / 2)) * 0.5f
                                           : L.ShaftX(0) + L.shaftPitch * 0.5f;
-    AddStatic({stationX, y + L.doorHeight * 0.5f + 0.15f, 0.08f}, {0.34f, L.doorHeight + 0.3f, 0.14f}, kStainless, Material::Metal);
+    AddStatic({stationX, y + L.doorHeight * 0.5f + 0.15f, 0.08f}, {0.34f, L.doorHeight + 0.3f, 0.14f}, kStainless, Material::Metal, Surface::BrushedMetal);
 
     // Office furniture, varied deterministically per floor.
     static const glm::vec3 deskColors[] = {{0.85f, 0.80f, 0.70f}, {0.55f, 0.40f, 0.30f}, {0.90f, 0.90f, 0.92f}};
     glm::vec3 desk = deskColors[floor % 3];
     if (floor == 0) {
         AddStatic({-8.5f, y + 0.55f, 4.2f}, {3.2f, 1.1f, 0.9f}, {0.30f, 0.32f, 0.38f});   // reception desk
-        AddStatic({8.0f, y + 0.25f, 5.0f}, {2.4f, 0.5f, 0.7f}, {0.45f, 0.30f, 0.22f});    // bench
+        AddStatic({8.0f, y + 0.25f, 5.0f}, {2.4f, 0.5f, 0.7f}, {0.45f, 0.30f, 0.22f}, Material::Matte, Surface::Wood);   // bench
         return;
     }
     for (float side : {-1.0f, 1.0f}) {
         for (float z : {-1.5f, 4.6f}) {
             float x = side * (B + (W - B) * 0.5f + (z > 0 ? 1.5f : 0.0f));
-            AddStatic({x, y + 0.72f, z}, {1.8f, 0.06f, 0.9f}, desk);                        // desktop
+            AddStatic({x, y + 0.72f, z}, {1.8f, 0.06f, 0.9f}, desk, Material::Matte, Surface::Wood);   // desktop
             AddStatic({x, y + 0.36f, z}, {1.6f, 0.7f, 0.08f}, kSteelDark);                  // modesty panel
             AddStatic({x + 0.3f, y + 0.95f, z - 0.25f}, {0.55f, 0.35f, 0.04f}, {0.10f, 0.10f, 0.12f});  // monitor
         }
-        // Potted plant
-        AddStatic({side * (W - 0.8f), y + 0.3f, 6.2f}, {0.45f, 0.6f, 0.45f}, {0.55f, 0.35f, 0.25f});
-        m_static.push_back({{&m_meshes.sphere, BoxTransform({side * (W - 0.8f), y + 0.95f, 6.2f}, glm::vec3(0.9f)),
-                             {0.30f, 0.55f, 0.28f}, Material::Matte, true}, false, {}, {}, m_tagArchitecture});
-    }
-}
-
-void SceneBuilder::AddSurroundings() {
-    const BuildingLayout& L = m_layout;
-    const float W = L.halfWidth + 0.2f, far = 250.0f;
-
-    // Ground around the building footprint (the footprint itself has slabs and pits).
-    struct Patch { glm::vec3 min, max; glm::vec3 color; };
-    const Patch ground[] = {
-        {{-far, -0.6f, -far}, {-W, -0.02f, far}, kGrass},
-        {{W, -0.6f, -far}, {far, -0.02f, far}, kGrass},
-        {{-W, -0.6f, -far}, {W, -0.02f, L.backZ - 0.3f}, kGrass},
-        {{-W, -0.6f, L.frontZ}, {W, -0.01f, L.frontZ + 5.0f}, kSidewalk},
-        {{-W, -0.6f, L.frontZ + 5.0f}, {W, -0.02f, far}, kGrass},
-        {{-far, -0.6f + 0.005f, L.frontZ + 6.0f}, {far, 0.0f, L.frontZ + 14.0f}, kRoad},
-    };
-    for (const Patch& p : ground) {
-        AddStatic((p.min + p.max) * 0.5f, p.max - p.min, p.color);
-        m_staticRayBoxes.push_back({{p.min, p.max}, p.color});
-    }
-    for (float x = -60.0f; x <= 60.0f; x += 6.0f)   // lane markings
-        AddStatic({x, 0.005f, L.frontZ + 10.0f}, {3.0f, 0.01f, 0.18f}, {0.95f, 0.92f, 0.80f});
-
-    // Neighbouring towers: skyline context and reflection targets.
-    struct Tower { glm::vec3 base, size, color; };
-    const Tower towers[] = {
-        {{-46.0f, 0.0f, -18.0f}, {16.0f, 58.0f, 18.0f}, {0.72f, 0.67f, 0.60f}},
-        {{44.0f, 0.0f, -12.0f}, {18.0f, 42.0f, 16.0f}, {0.56f, 0.63f, 0.72f}},
-        {{-78.0f, 0.0f, -70.0f}, {22.0f, 90.0f, 22.0f}, {0.62f, 0.64f, 0.70f}},
-        {{70.0f, 0.0f, -75.0f}, {24.0f, 72.0f, 20.0f}, {0.74f, 0.71f, 0.64f}},
-        {{0.0f, 0.0f, -95.0f}, {34.0f, 55.0f, 22.0f}, {0.66f, 0.60f, 0.56f}},
-    };
-    for (const Tower& t : towers) {
-        glm::vec3 center = t.base + glm::vec3(0.0f, t.size.y * 0.5f, 0.0f);
-        AddStatic(center, t.size, t.color);
-        m_staticRayBoxes.push_back({{center - t.size * 0.5f, center + t.size * 0.5f}, t.color});
-        // Window bands: slightly inset dark strips every 3.6 m.
-        for (float y = 2.0f; y < t.size.y - 1.0f; y += 3.6f)
-            AddStatic(t.base + glm::vec3(0.0f, y, t.size.z * 0.5f + 0.02f), {t.size.x - 1.0f, 1.4f, 0.05f}, kGlass, Material::Metal);
-    }
-
-    // Street trees
-    for (float x : {-24.5f, -17.5f, -10.5f, 10.5f, 17.5f, 24.5f}) {
-        glm::vec3 base(x, 0.0f, L.frontZ + 3.2f);
-        m_static.push_back({Segment(base, base + glm::vec3(0, 2.2f, 0), 0.14f, {0.40f, 0.28f, 0.18f}), false, {}, {}});
-        m_static.push_back({{&m_meshes.sphere, BoxTransform(base + glm::vec3(0, 3.0f, 0), glm::vec3(2.4f, 2.2f, 2.4f)),
-                             {0.33f, 0.56f, 0.28f}, Material::Matte, true}, false, {}, {}});
     }
 }
 
@@ -296,27 +245,27 @@ void SceneBuilder::AddCar(const sim::Car& car, bool selected, std::vector<DrawIt
     items.push_back(Box({x, y + h + 0.35f, z}, {w + 0.35f, 0.2f, 0.24f}, accent));
 
     // Cab: wood back wall, stainless side walls, ceiling with a light panel.
-    items.push_back(Box({x, y + h * 0.5f, z - d * 0.5f + 0.03f}, {w, h, 0.06f}, kWoodPanel));
+    items.push_back(Box({x, y + h * 0.5f, z - d * 0.5f + 0.03f}, {w, h, 0.06f}, kWoodPanel, Material::Matte, Surface::Wood));
     for (float side : {-1.0f, 1.0f})
-        items.push_back(Box({x + side * (w * 0.5f - 0.03f), y + h * 0.5f, z}, {0.06f, h, d}, kStainless, Material::Metal));
+        items.push_back(Box({x + side * (w * 0.5f - 0.03f), y + h * 0.5f, z}, {0.06f, h, d}, kStainless, Material::Metal, Surface::BrushedMetal));
     items.push_back(Box({x, y + h + 0.04f, z}, {w, 0.08f, d}, kStainless));
     items.push_back(Box({x, y + h - 0.03f, z}, {w - 0.5f, 0.03f, d - 0.5f}, kCeilingLight, Material::Emissive));
-    items.push_back(Box({x, y + 0.95f, z - d * 0.5f + 0.1f}, {w - 0.4f, 0.05f, 0.05f}, kStainless, Material::Metal)); // handrail
+    items.push_back(Box({x, y + 0.95f, z - d * 0.5f + 0.1f}, {w - 0.4f, 0.05f, 0.05f}, kStainless, Material::Metal, Surface::BrushedMetal)); // handrail
 
     // Front: returns beside the entrance and a transom above it.
     float returnWidth = (w - L.doorWidth) * 0.5f;
     for (float side : {-1.0f, 1.0f})
         items.push_back(Box({x + side * (L.doorWidth * 0.5f + returnWidth * 0.5f), y + h * 0.5f, front - 0.03f},
-                            {returnWidth, h, 0.06f}, kStainless, Material::Metal));
+                            {returnWidth, h, 0.06f}, kStainless, Material::Metal, Surface::BrushedMetal));
     items.push_back(Box({x, y + L.doorHeight + (h - L.doorHeight) * 0.5f, front - 0.03f},
-                        {L.doorWidth, h - L.doorHeight, 0.06f}, kStainless, Material::Metal));
+                        {L.doorWidth, h - L.doorHeight, 0.06f}, kStainless, Material::Metal, Surface::BrushedMetal));
 
     // Center-opening car door panels.
     float travel = car.Doors().PanelTravel() * L.doorWidth * 0.5f;
     for (float side : {-1.0f, 1.0f}) {
         float px = x + side * (L.doorWidth * 0.25f + travel);
         items.push_back(Box({px, y + L.doorHeight * 0.5f, front + 0.02f}, {L.doorWidth * 0.5f, L.doorHeight, 0.04f},
-                            kStainless, Material::Metal));
+                            kStainless, Material::Metal, Surface::BrushedMetal));
     }
 
     // Floating marker over the selected car; red while out of service.
@@ -344,7 +293,7 @@ void SceneBuilder::AddCounterweight(const sim::Car& car, std::vector<DrawItem>& 
     for (int i = 0; i < plates; ++i) {
         float py = box.min.y + 0.12f + plateHeight * (i + 0.5f);
         glm::vec3 shade = (i % 2) ? kCwtFiller : kCwtFiller * 0.85f;
-        items.push_back(Box({c.x, py, c.z}, {size.x - 0.2f, plateHeight * 0.92f, size.z}, shade));
+        items.push_back(Box({c.x, py, c.z}, {size.x - 0.2f, plateHeight * 0.92f, size.z}, shade, Material::Matte, Surface::Concrete));
     }
 }
 
@@ -514,7 +463,7 @@ void SceneBuilder::AddLandings(const sim::ElevatorSystem& system, bool xray, std
             float travel = carHere ? car.Doors().PanelTravel() * L.doorWidth * 0.5f : 0.0f;
             for (float side : {-1.0f, 1.0f})
                 items.push_back(Box({x + side * (L.doorWidth * 0.25f + travel), y + L.doorHeight * 0.5f, 0.02f},
-                                    {L.doorWidth * 0.5f, L.doorHeight, 0.04f}, kStainless, Material::Metal));
+                                    {L.doorWidth * 0.5f, L.doorHeight, 0.04f}, kStainless, Material::Metal, Surface::BrushedMetal));
 
             // Hall lantern above the entrance announces the arriving car's direction.
             bool announcing = carHere && (car.mode == sim::CarMode::DoorsOpening || car.mode == sim::CarMode::DoorsOpen);

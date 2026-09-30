@@ -36,5 +36,5 @@ private:
     float m_distance = 38.0f;
     float m_fovDeg = 45.0f;
     float m_near = 0.2f;
-    float m_far = 600.0f;
+    float m_far = 900.0f;
 };

@@ -46,10 +46,9 @@ private:
 
     void BuildStatic();
     void AddStatic(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                   Material material = Material::Matte);
+                   Material material = Material::Matte, Surface surface = Surface::Plain);
     void AddWall(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                 const glm::vec3& outward, Material material = Material::Matte);
-    void AddSurroundings();
+                 const glm::vec3& outward, Material material = Material::Matte, Surface surface = Surface::Plain);
     void AddFloorInterior(int floor);
 
     void AddCar(const sim::Car& car, bool selected, std::vector<DrawItem>& items) const;
@@ -60,7 +59,7 @@ private:
     void AddPit(const sim::Car& car, std::vector<DrawItem>& items) const;
 
     DrawItem Box(const glm::vec3& center, const glm::vec3& size, const glm::vec3& color,
-                 Material material = Material::Matte) const;
+                 Material material = Material::Matte, Surface surface = Surface::Plain) const;
     DrawItem Segment(const glm::vec3& a, const glm::vec3& b, float radius, const glm::vec3& color) const;
 
     const BuildingLayout& m_layout;

@@ -6,6 +6,8 @@ LiftSim models a 25-storey office tower served by four 2.5 m/s gearless traction
 
 ![Overview](docs/images/overview.png)
 
+![City](docs/images/city.png)
+
 | Component inspector: traction machine | Roping geometry (158° wrap) | Pit: buffers and compensation |
 |---|---|---|
 | ![Machine](docs/images/inspect-machine.png) | ![Ropes](docs/images/inspect-ropes.png) | ![Pit](docs/images/inspect-pit.png) |
@@ -53,6 +55,9 @@ Every simulation requirement has an ID, a source, and a verifying test ([docs/RE
 - **Ray picking:** clicking the screen casts a ray to select a car or call a car to a floor. It uses the same slab algorithm on the CPU.
 - **Procedural animation:** passengers are forward-kinematics skeletons with a distance-driven walk cycle (no foot sliding). Sheaves, deflectors and governors spin at the true rope speed. The traveling cable's U-loop is solved from its fixed length.
 - **Dollhouse cut-away:** walls facing the camera are culled so the building always opens toward the viewer. X-ray mode strips the architecture down to the equipment.
+- **GPU instancing:** the surrounding city (172 towers, 1,100 street trees, 140 moving cars, road markings and indoor plants on every floor, about 8,900 instances) is drawn with 16 instanced draw calls.
+- **Procedural textures, no image files:** concrete, terrazzo, carpet tiles, wood grain, brushed steel, asphalt, grass and window facades are generated in the shader from 3D noise and box projection. Detail is anti-aliased with `fwidth`.
+- **Vertex-shader wind** on trees and plants (the shadows sway too) and **FBM clouds** in the sky.
 - ACES tone mapping, aerial fog, gamma correction.
 
 ## Build
@@ -77,7 +82,7 @@ The first configure downloads SDL2 and GLM with CMake FetchContent. To build onl
 | Click a car / click a floor | Select car / call a car to that floor |
 | `Tab` / `Shift+Tab`, `Esc` | Component inspector: next / previous component, close |
 | `I` | Engineering references (click to open) |
-| `F1`–`F5` | Views: overview, lobby, machine room, hoistway x-ray, follow car |
+| `F1`–`F6` | Views: overview, lobby, machine room, hoistway x-ray, follow car, aerial city |
 | `1`–`4`, `F` | Select car, toggle follow camera |
 | `Space`, `[` `]` | Pause, simulation speed (0.25×–32×) |
 | `T`, `+` `-` | Traffic pattern, arrival rate |
@@ -95,6 +100,7 @@ src/sim/      Simulation core. Plain C++, no graphics, fully unit-tested.
   ElevatorSystem        group controller: hall calls, ETA dispatch, boarding, KPIs
   Traffic               Poisson traffic generator
 src/view/     Turns simulation state into things to draw.
+  Environment           instanced city, streets, trees, traffic, indoor plants
   BuildingLayout        world-space positions of everything (single source of truth)
   SceneBuilder          building, cars, machines, ropes -> draw items + ray-trace boxes
   PeopleView            passenger placement, walking, FK skeleton animation

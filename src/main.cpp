@@ -8,7 +8,7 @@
 //   app/     window, input and the frame loop
 //
 // Command line (used for automated screenshots):
-//   LiftSim --screenshot out.png [--warmup 120] [--view 0..4] [--inspect 0..7]
+//   LiftSim --screenshot out.png [--warmup 120] [--view 0..5] [--inspect 0..7]
 //           [--car 0..3] [--traffic 0..3] [--rate N] [--fault]
 
 #include "app/Application.h"

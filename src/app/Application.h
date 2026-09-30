@@ -11,6 +11,7 @@
 #include "ui/Hud.h"
 #include "ui/Inspector.h"
 #include "view/BuildingLayout.h"
+#include "view/Environment.h"
 #include "view/PeopleView.h"
 #include "view/SceneBuilder.h"
 
@@ -19,7 +20,7 @@
 struct LaunchOptions {
     std::string screenshotPath;
     float warmupSeconds = 120.0f;
-    int   view = 0;          // camera preset (F1-F5)
+    int   view = 0;          // camera preset (F1-F6)
     int   inspect = -1;      // open the component inspector on this component
     int   car = 0;           // selected car
     int   traffic = 0;       // sim::TrafficPattern
@@ -65,6 +66,7 @@ private:
     MeshLibrary m_meshes;
     BuildingLayout m_layout;
     SceneBuilder m_sceneBuilder;
+    Environment m_environment;
     PeopleView m_people;
     Renderer m_renderer;
     Hud m_hud;
@@ -74,6 +76,8 @@ private:
 
     std::vector<DrawItem> m_items;
     std::vector<RayBox> m_rayBoxes;
+    std::vector<const InstanceBatch*> m_batches;
+    float m_clock = 0.0f;         // wall-clock seconds, for wind, clouds and traffic
     std::mt19937 m_rng{7};
     float m_accumulator = 0.0f;
     float m_simAdvanced = 0.0f;   // simulated seconds covered by this frame

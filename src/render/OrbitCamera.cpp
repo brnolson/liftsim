@@ -10,7 +10,7 @@ void OrbitCamera::Orbit(float dYawDeg, float dPitchDeg) {
 
 void OrbitCamera::Zoom(float wheelSteps) {
     // Multiplicative zoom feels uniform whether close up or far away.
-    m_distance = std::clamp(m_distance * std::pow(0.88f, wheelSteps), 4.0f, 200.0f);
+    m_distance = std::clamp(m_distance * std::pow(0.88f, wheelSteps), 2.0f, 320.0f);
 }
 
 void OrbitCamera::Pan(float dx, float dy) {

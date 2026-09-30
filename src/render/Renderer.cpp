@@ -112,13 +112,19 @@ void Renderer::ShadowPass(const FrameData& frame, const glm::mat4& lightViewProj
     glEnable(GL_POLYGON_OFFSET_FILL);
     glPolygonOffset(2.0f, 4.0f);             // pushes depth back a little: no "shadow acne"
 
-    m_shadowShader.Use();
-    m_shadowShader.SetMat4("uLightViewProj", lightViewProj);
+    Shader& s = m_shadowShader;
+    s.Use();
+    s.SetMat4("uLightViewProj", lightViewProj);
+    s.SetFloat("uTime", frame.time);
+    s.SetInt("uInstanced", 0);
     for (const DrawItem& item : *frame.items) {
         if (!item.castsShadow) continue;
-        m_shadowShader.SetMat4("uModel", item.model);
+        s.SetMat4("uModel", item.model);
         item.mesh->Draw();
     }
+    s.SetInt("uInstanced", 1);
+    for (const InstanceBatch* batch : *frame.batches)
+        if (batch->CastsShadow()) batch->Draw();
     glDisable(GL_POLYGON_OFFSET_FILL);
 }
 
@@ -142,6 +148,7 @@ void Renderer::ScenePass(const FrameData& frame, const glm::mat4& lightViewProj)
     s.SetVec3("uCameraPos", frame.cameraPos);
     s.SetVec3("uSunDir", m_sunDir);
     s.SetVec3("uSunColor", m_sunColor);
+    s.SetFloat("uTime", frame.time);
     s.SetInt("uShadowsOn", frame.settings.shadows ? 1 : 0);
     s.SetInt("uRayTracingOn", frame.settings.rayTracedReflections ? 1 : 0);
     glActiveTexture(GL_TEXTURE0);
@@ -161,13 +168,23 @@ void Renderer::ScenePass(const FrameData& frame, const glm::mat4& lightViewProj)
     s.SetVec3Array("uBoxMax", maxs.data(), static_cast<int>(maxs.size()));
     s.SetVec3Array("uBoxColor", colors.data(), static_cast<int>(colors.size()));
 
+    s.SetInt("uInstanced", 0);
     for (const DrawItem& item : *frame.items) {
         s.SetMat4("uModel", item.model);
         // Normals need the inverse-transpose so non-uniform scaling keeps them perpendicular.
         s.SetMat3("uNormalMatrix", glm::transpose(glm::inverse(glm::mat3(item.model))));
         s.SetVec3("uColor", item.color);
         s.SetInt("uMaterial", static_cast<int>(item.material));
+        s.SetInt("uSurface", static_cast<int>(item.surface));
         item.mesh->Draw();
+    }
+
+    // Instanced batches: model matrix and color come from per-instance attributes.
+    s.SetInt("uInstanced", 1);
+    for (const InstanceBatch* batch : *frame.batches) {
+        s.SetInt("uMaterial", static_cast<int>(batch->Mat()));
+        s.SetInt("uSurface", static_cast<int>(batch->Surf()));
+        batch->Draw();
     }
 }
 
@@ -191,6 +208,7 @@ void Renderer::PostPass(const FrameData& frame) {
     s.SetMat4("uInvViewProj", glm::inverse(frame.projection * frame.view));
     s.SetVec3("uSunDir", m_sunDir);
     s.SetInt("uOutlinesOn", frame.settings.outlines ? 1 : 0);
+    s.SetFloat("uTime", frame.time);
 
     glBindVertexArray(m_emptyVao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

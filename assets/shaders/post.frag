@@ -13,6 +13,36 @@ uniform float uFar;
 uniform mat4  uInvViewProj;
 uniform vec3  uSunDir;
 uniform int   uOutlinesOn;
+uniform float uTime;
+
+float Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+float Noise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(Hash(i), Hash(i + vec2(1, 0)), u.x), mix(Hash(i + vec2(0, 1)), Hash(i + vec2(1, 1)), u.x), u.y);
+}
+
+float Fbm(vec2 p) {
+    float sum = 0.0, amplitude = 0.5;
+    for (int i = 0; i < 5; ++i) {
+        sum += amplitude * Noise(p);
+        p *= 2.1;
+        amplitude *= 0.5;
+    }
+    return sum;
+}
+
+// Clouds: intersect the view ray with a flat layer high above the city, then
+// threshold drifting fractal noise at that point. Thin out toward the horizon.
+vec3 AddClouds(vec3 sky, vec3 dir) {
+    if (dir.y <= 0.01) return sky;
+    vec2 layer = dir.xz / dir.y * 0.004 + vec2(uTime * 0.002, uTime * 0.0007);
+    float density = smoothstep(0.48, 0.75, Fbm(layer * 6.0));
+    float fade = smoothstep(0.02, 0.25, dir.y);
+    vec3 cloud = vec3(1.25, 1.22, 1.18) * (0.85 + 0.3 * Fbm(layer * 14.0));
+    return mix(sky, cloud, density * fade * 0.85);
+}
 
 // Keep in sync with SkyColor() in scene.frag.
 vec3 SkyColor(vec3 dir) {
@@ -65,7 +95,7 @@ void main() {
     vec3 color;
 
     if (depth >= 1.0) {
-        color = SkyColor(viewDir);
+        color = AddClouds(SkyColor(viewDir), viewDir);
     } else {
         color = texture(uSceneColor, vUV).rgb;
         float distance = LinearDepth(depth);

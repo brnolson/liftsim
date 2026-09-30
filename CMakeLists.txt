@@ -41,9 +41,11 @@ add_executable(LiftSim
     src/render/Mesh.cpp
     src/render/OrbitCamera.cpp
     src/render/Renderer.cpp
+    src/render/InstanceBatch.cpp
     src/view/BuildingLayout.cpp
     src/view/SceneBuilder.cpp
     src/view/PeopleView.cpp
+    src/view/Environment.cpp
     src/ui/TextRenderer.cpp
     src/ui/Hud.cpp
     src/ui/Inspector.cpp
@@ -56,9 +58,10 @@ if(MINGW)
     target_link_options(LiftSim PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
 
-add_custom_command(TARGET LiftSim POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/assets $<TARGET_FILE_DIR:LiftSim>/assets)
+# Shaders are loaded at run time; copy them on every build so edits are picked up.
+add_custom_target(liftsim_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/assets ${CMAKE_BINARY_DIR}/assets)
+add_dependencies(LiftSim liftsim_assets)
 endif()
 
 # --- Tests -------------------------------------------------------------------

@@ -284,7 +284,7 @@ void Hud::DrawMotionTrace(float x, float y, float w, float h) {
 void Hud::DrawControls(int width, float y) {
     const char* help =
         "LMB drag orbit | RMB drag pan | Wheel zoom | Click car: select, click floor: call | "
-        "Tab inspect components | I references | F1-F5 views | 1-9 car | F follow | Space pause | [ ] speed | T traffic | +/- rate | "
+        "Tab inspect components | I references | F1-F6 views | 1-9 car | F follow | Space pause | [ ] speed | T traffic | +/- rate | "
         "O drive fault | R reset | X x-ray | G reflections | J shadows | K outlines | H hide HUD";
     float w = m_text.MeasureText(help, 0.85f);
     float x = std::max(8.0f, (width - w) * 0.5f);

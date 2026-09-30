@@ -1,8 +1,10 @@
 #pragma once
 
+#include "render/InstanceBatch.h"
 #include "render/Mesh.h"
 #include "render/RayMath.h"
 #include "render/Shader.h"
+#include "render/Surface.h"
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -21,6 +23,7 @@ struct DrawItem {
     glm::vec3   color{1.0f};    // sRGB albedo
     Material    material = Material::Matte;
     bool        castsShadow = true;
+    Surface     surface = Surface::Plain;
 };
 
 // A box in the simplified scene that reflection rays are traced against.
@@ -38,6 +41,8 @@ struct RenderSettings {
 struct FrameData {
     const std::vector<DrawItem>* items = nullptr;
     const std::vector<RayBox>*   rayBoxes = nullptr;
+    const std::vector<const InstanceBatch*>* batches = nullptr;   // instanced environment
+    float     time = 0.0f;         // seconds, drives wind and clouds
     glm::mat4 view{1.0f}, projection{1.0f};
     glm::vec3 cameraPos{0.0f};
     float     nearPlane = 0.1f, farPlane = 500.0f;
