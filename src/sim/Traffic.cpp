@@ -40,12 +40,15 @@ int TrafficGenerator::RandomUpperFloor() {
 
 TripRequest TrafficGenerator::RandomTrip() {
     // Share of trips that are [incoming from lobby, outgoing to lobby];
-    // the rest are interfloor trips between two upper floors.
+    // the rest are interfloor trips between two upper floors. Up-peak and
+    // lunch follow the office demand templates in Peters' surveys (CIBSE
+    // Guide D): up-peak 85/10/5, lunch 45/45/10. Down-peak mirrors up-peak and
+    // interfloor is mostly between upper floors (assumptions).
     float incoming = 0.0f, outgoing = 0.0f;
     switch (m_pattern) {
     case TrafficPattern::UpPeak:     incoming = 0.85f; outgoing = 0.10f; break;
     case TrafficPattern::DownPeak:   incoming = 0.05f; outgoing = 0.85f; break;
-    case TrafficPattern::Lunch:      incoming = 0.40f; outgoing = 0.40f; break;
+    case TrafficPattern::Lunch:      incoming = 0.45f; outgoing = 0.45f; break;
     case TrafficPattern::Interfloor: incoming = 0.10f; outgoing = 0.10f; break;
     }
 

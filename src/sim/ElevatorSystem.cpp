@@ -322,6 +322,10 @@ void ElevatorSystem::TransferPassengers(Car& car, float dt) {
         car.AddLoad(-p.massKg);
         car.riders.erase(car.riders.begin() + static_cast<long>(i));
 
+        // Waiting time is measured from arrival at the landing until boarding,
+        // so it includes being left behind by a full car. The CIBSE definition
+        // ends when the responding car arrives and begins to open its doors,
+        // so these figures run slightly longer than a CIBSE waiting time.
         float wait = p.boardTime - p.spawnTime;
         m_stats.served++;
         m_stats.totalWait += wait;
