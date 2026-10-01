@@ -118,6 +118,14 @@ void SceneBuilder::BuildStatic() {
             AddWall({side * (W + 0.1f), fy + 0.95f + (L.spec.floorHeight - 1.2f) * 0.5f, zc},
                     {0.12f, L.spec.floorHeight - 1.2f, depth}, kGlass, outward, Material::Metal);
         }
+        // Front curtain wall: culled like the side walls when the camera is in front of it.
+        {
+            float width = 2.0f * W + 0.4f;
+            glm::vec3 outward(0.0f, 0.0f, 1.0f);
+            AddWall({0.0f, fy + 0.35f, L.frontZ + 0.1f}, {width, 1.2f, 0.2f}, kSpandrel, outward, Material::Matte, Surface::Concrete);
+            AddWall({0.0f, fy + 0.95f + (L.spec.floorHeight - 1.2f) * 0.5f, L.frontZ + 0.1f},
+                    {width, L.spec.floorHeight - 1.2f, 0.12f}, kGlass, outward, Material::Metal);
+        }
         m_tagArchitecture = false;
     }
 
