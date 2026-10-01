@@ -245,8 +245,12 @@ void Hud::DrawCarDetail(const sim::Car& car, float x, float y) {
     contact("Governor", s.governorOk, x + 150.0f);
     contact("UCM", s.ucmOk, x + 270.0f);
     ly -= kLine;
-    m_text.DrawText(s.Complete() ? "Chain closed: drive may run" : "Chain open: drive disabled, brake set",
-                    x + 14.0f, ly, 1.0f, s.Complete() ? kGood : kWarn);
+    std::string chain = "Chain closed: drive may run";
+    if (car.StoppedBy() != sim::StoppingDevice::None)
+        chain = Fmt("Chain open: stopped by the %s", sim::ToString(car.StoppedBy()));
+    else if (!s.Complete())
+        chain = "Chain open: drive disabled, brake set";
+    m_text.DrawText(chain, x + 14.0f, ly, 1.0f, s.Complete() ? kGood : kWarn);
 }
 
 void Hud::DrawMotionTrace(float x, float y, float w, float h) {

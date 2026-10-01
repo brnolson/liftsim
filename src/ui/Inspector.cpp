@@ -90,8 +90,8 @@ Inspector::Card Inspector::Describe(const sim::ElevatorSystem& system, const Bui
         const float rope = spec.HoistRopeMassPerM();
         c.title = "Hoist ropes and traction";
         c.about = {Fmt("%d x 13 mm steel ropes, single wrap with a deflector sheave.", spec.hoistRopeCount),
-                   "The ropes hold while the tension ratio stays under the",
-                   Fmt("Euler-Eytelwein limit. Wrap angle from geometry: %.0f deg.", spec.TractionWrapAngle() * deg)};
+                   "The ropes hold while the tension ratio stays under the Euler-",
+                   Fmt("Eytelwein limit (normal operation). Wrap from geometry: %.0f deg.", spec.TractionWrapAngle() * deg)};
         c.live = {Fmt("T_car %6.1f kN    T_cwt %6.1f kN", t.tensionCarN / 1000.0f, t.tensionCwtN / 1000.0f),
                   Fmt("T1/T2 %.3f   limit %.3f   (%.0f%% used)", t.tensionRatio, t.tractionLimit,
                       100.0f * t.tensionRatio / t.tractionLimit),
@@ -108,13 +108,14 @@ Inspector::Card Inspector::Describe(const sim::ElevatorSystem& system, const Bui
         const float governorRpm = std::abs(v) / (2.0f * sim::kPi * L.GovernorRadius()) * 60.0f;
         c.title = "Overspeed governor";
         c.about = {"Flyweight governor driven by a rope loop clamped to the car.",
-                   "At 115% of rated speed it trips and sets the safety gear,",
-                   "which grips the guide rails. Press O to inject a drive fault."};
+                   "Past 115% of rated speed it trips. Moving down, its rope sets the",
+                   "safety gear on the rails; moving up, a rope brake stops the car."};
         c.live = {Fmt("Car speed %5.2f m/s   trip speed %.3f m/s", std::abs(v), tripSpeed),
                   Fmt("Governor sheave %5.0f rpm", governorRpm),
-                  car.Safety().governorOk ? "Status: armed" : "Status: TRIPPED - safety gear set, car out of service"};
-        c.equation = "v_trip >= 1.15 * v_rated     safety gear: 0.2 g <= a_avg <= 1.0 g";
-        c.sources = {"EN81-20", "A17.1"};
+                  car.Safety().governorOk ? "Status: armed  (press O to inject a drive fault)"
+                                          : Fmt("Status: TRIPPED - stopped by the %s", sim::ToString(car.StoppedBy()))};
+        c.equation = "v_trip >= 1.15 v   down: gear 0.2-1.0 g   up: rope brake <= 1 g";
+        c.sources = {"EN81-20", "KONE-EN81", "A17.1"};
         break;
     }
 

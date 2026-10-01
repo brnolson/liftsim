@@ -53,11 +53,24 @@ struct ElevatorSpec {
     float doorDwellTime    = 3.0f;     // s  held open when nobody transfers
     float transferTime     = 1.2f;     // s  per passenger boarding or alighting
 
-    // --- Safety (EN 81-20) ---
-    float governorTripRatio = 1.15f;             // governor trips at >= 115% rated speed
-    float safetyGearDecel   = 0.5f * kGravity;   // average retardation must be 0.2g..1.0g
-    float ucmDetectDistance = 0.15f;             // m moved with doors open before UCM trips
-    float fullLoadBypass    = 0.80f;             // skip hall calls above 80% load
+    // --- Safety devices ---
+    // Each device is modelled as a constant average retardation. Which device
+    // acts depends on the fault (see Car::UpdateSafety).
+    float governorTripRatio = 1.15f;             // EN 81-20: governor trips at >= 115% rated speed
+    // Descending overspeed: the governor sets the car's progressive safety gear
+    // on the guide rails. EN 81-20 requires 0.2 g to 1.0 g average retardation.
+    float safetyGearDecel   = 0.5f * kGravity;
+    // Ascending overspeed: the car's safety gear only grips downward, so EN 81-20
+    // requires separate ascending car overspeed protection, here a rope brake.
+    // Retardation of the empty car must not exceed 1 g; 0.5 g is an assumption.
+    float ropeBrakeDecel    = 0.5f * kGravity;
+    // Unintended car movement: the detected movement is stopped by the certified
+    // machine brake, which must hold the car within 1.2 m of the landing.
+    // 0.5 g is an assumption.
+    float machineBrakeDecel = 0.5f * kGravity;
+    float ucmDetectDistance = 0.15f;             // m moved with doors open before UCM trips (assumption)
+    float ucmStopLimit      = 1.2f;              // m, EN 81-20 maximum distance from the landing
+    float fullLoadBypass    = 0.80f;             // skip hall calls above 80% load (assumption)
 
     float CounterweightMassKg() const { return carMassKg + balanceRatio * ratedLoadKg; }
     float HoistRopeMassPerM() const { return hoistRopeCount * hoistRopeMassPerM; }

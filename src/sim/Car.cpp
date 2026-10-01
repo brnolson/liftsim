@@ -16,6 +16,16 @@ const char* ToString(CarMode mode) {
     return "?";
 }
 
+const char* ToString(StoppingDevice device) {
+    switch (device) {
+    case StoppingDevice::None:         return "none";
+    case StoppingDevice::SafetyGear:   return "safety gear";
+    case StoppingDevice::RopeBrake:    return "rope brake";
+    case StoppingDevice::MachineBrake: return "machine brake";
+    }
+    return "?";
+}
+
 static MotionLimits LimitsFrom(const ElevatorSpec& s) {
     return {s.ratedSpeed, s.maxAccel, s.maxJerk, s.levelingSpeed};
 }
@@ -42,23 +52,37 @@ void Car::Update(float dt) {
 void Car::UpdateSafety() {
     m_safety.doorsLocked = m_doors.IsClosed();
 
-    // Overspeed governor: a rope-driven flyweight mechanism that trips at 115%
-    // of rated speed and mechanically engages the safety gear on the rails.
+    // Overspeed governor: a flyweight mechanism driven by a rope loop clamped
+    // to the car, so it turns at car speed. Past 115% of rated speed its switch
+    // opens the safety chain, and the direction of travel decides what stops
+    // the car (EN 81-20):
+    //   - moving down: the governor rope pulls the car's safety gear, whose
+    //     wedges grip the guide rails;
+    //   - moving up: the safety gear cannot act (it only grips downward), so a
+    //     separate ascending car overspeed protection does, here a rope brake.
+    // The upward case is the common one in practice: an empty car is lighter
+    // than its counterweight, so if the brake fails it rises.
     if (m_safety.governorOk &&
         std::abs(Velocity()) > m_spec.governorTripRatio * m_spec.ratedSpeed) {
         m_safety.governorOk = false;
-        m_motion.EmergencyStop(m_spec.safetyGearDecel);
-        mode = CarMode::OutOfService;
+        if (Velocity() < 0.0f) EmergencyStop(StoppingDevice::SafetyGear, m_spec.safetyGearDecel);
+        else                   EmergencyStop(StoppingDevice::RopeBrake, m_spec.ropeBrakeDecel);
     }
 
     // Unintended car movement (EN 81-20): the car must not leave the landing
-    // while the doors are unlocked.
+    // while the doors are unlocked. Detection opens the safety chain and the
+    // machine brake stops the car, which must happen within 1.2 m.
     if (m_safety.ucmOk && !m_doors.IsClosed() &&
         std::abs(Position() - m_doorZoneCenter) > m_spec.ucmDetectDistance) {
         m_safety.ucmOk = false;
-        m_motion.EmergencyStop(m_spec.safetyGearDecel);
-        mode = CarMode::OutOfService;
+        EmergencyStop(StoppingDevice::MachineBrake, m_spec.machineBrakeDecel);
     }
+}
+
+void Car::EmergencyStop(StoppingDevice device, float decel) {
+    m_stoppedBy = device;
+    m_motion.EmergencyStop(decel);
+    mode = CarMode::OutOfService;   // latched until a technician resets it
 }
 
 // ---------------------------------------------------------------------------
@@ -161,12 +185,16 @@ void Car::InjectDriveFault() {
     m_driveFault = true;
 
     // With motor torque and brake lost, the system freewheels toward the
-    // heavier side: an empty car rises because the counterweight outweighs it.
+    // heavier side. Newton's second law on everything that moves together:
+    //   a = (M_cwt_side - M_car_side) * g / (M_car_side + M_cwt_side + m_rot)
+    // An empty car rises because the counterweight outweighs it; a full car
+    // (car + 100% load vs. car + 45%) falls.
     SuspensionLoads s = Suspension();
     float accel = (s.cwtSideKg - s.carSideKg) * kGravity / s.movingKg;
 
-    // Near balance the drift is very slow; enforce a minimum so the governor
-    // still trips within a few seconds.
+    // Near balance (car about 45% loaded) the drift is very slow. Enforce a
+    // minimum so the demo reaches tripping speed within a few seconds; this
+    // is a simulation shortcut, not physics.
     if (std::abs(accel) < 0.4f) accel = (accel >= 0.0f ? 0.4f : -0.4f);
     m_motion.ForceAcceleration(accel);
     mode = CarMode::Running;
@@ -177,6 +205,7 @@ void Car::ResetFaults() {
     m_driveFault = false;
     m_safety.governorOk = true;
     m_safety.ucmOk = true;
+    m_stoppedBy = StoppingDevice::None;
     mode = CarMode::Idle;
     // Rescue operation: relevel to the nearest landing so riders can get out.
     carCalls[NearestFloor()] = true;

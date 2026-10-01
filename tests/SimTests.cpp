@@ -93,30 +93,56 @@ int main() {
         CHECK(!car.IsRunning());
     });
 
-    Test("REQ-SAF-02  Overspeed governor trips at 115% and the safety gear stops the car", [&] {
-        Car car(0, spec, building);
+    // Runs a car with an injected drive fault until it has been stopped, and
+    // returns the highest speed it reached.
+    auto runFault = [&](Car& car) {
         car.InjectDriveFault();
         float peak = 0.0f;
-        for (int i = 0; i < 120 * 30 && car.mode != CarMode::OutOfService; ++i) car.Update(kDt);
-        CHECK(car.mode == CarMode::OutOfService);
+        for (int i = 0; i < 120 * 40; ++i) {
+            car.Update(kDt);
+            peak = std::max(peak, std::abs(car.Velocity()));
+            if (car.mode == CarMode::OutOfService && !car.IsRunning()) break;
+        }
+        return peak;
+    };
+
+    Test("REQ-SAF-02a  Ascending overspeed: governor trips at 115%, the rope brake stops the empty car", [&] {
+        Car car(0, spec, building);                      // empty car at the lobby: it rises
+        float peak = runFault(car);
         CHECK(!car.Safety().governorOk);
-        for (int i = 0; i < 120 * 5; ++i) { car.Update(kDt); peak = std::max(peak, std::abs(car.Velocity())); }
+        CHECK(car.StoppedBy() == StoppingDevice::RopeBrake);
         CHECK(!car.IsRunning());
+        CHECK(peak >= spec.governorTripRatio * spec.ratedSpeed);
         CHECK(peak < 1.2f * spec.ratedSpeed);
     });
 
-    Test("REQ-SAF-03  Unintended car movement with doors open is detected and stopped", [&] {
+    Test("REQ-SAF-02b  Descending overspeed: governor trips at 115%, the safety gear stops the full car", [&] {
+        Car car(0, spec, building);
+        car.StartRun(building.floorCount - 1);           // send it to the top first
+        for (int i = 0; i < 120 * 60 && car.IsRunning(); ++i) car.Update(kDt);
+        car.AddLoad(spec.ratedLoadKg);                   // full car: heavier than its counterweight, so it falls
+        float peak = runFault(car);
+        CHECK(!car.Safety().governorOk);
+        CHECK(car.StoppedBy() == StoppingDevice::SafetyGear);
+        CHECK(!car.IsRunning());
+        CHECK(peak < 1.2f * spec.ratedSpeed);
+        CHECK(car.Position() > 0.0f);                    // stopped well before the pit
+    });
+
+    Test("REQ-SAF-03  Unintended car movement with doors open: machine brake stops it within 1.2 m", [&] {
         Car car(0, spec, building);
         car.OpenDoors();
         for (int i = 0; i < 120; ++i) car.Update(kDt);
-        car.InjectDriveFault();
-        for (int i = 0; i < 120 * 5; ++i) car.Update(kDt);
+        runFault(car);
         CHECK(!car.Safety().ucmOk);
+        CHECK(car.StoppedBy() == StoppingDevice::MachineBrake);
         CHECK(!car.IsRunning());
-        CHECK(std::abs(car.Position()) < 0.5f);
+        CHECK(std::abs(car.Position()) < spec.ucmStopLimit);
     });
 
-    Test("REQ-TRC-01  Ropes never slip: tension ratio under e^(f*alpha) at full load", [&] {
+    // Normal-operation traction case only (full car, full acceleration). EN 81-50
+    // also defines emergency-braking and stalled cases, which are not modelled.
+    Test("REQ-TRC-01  Normal operation: tension ratio under e^(f*alpha) with a full car", [&] {
         ElevatorSystem system(building, spec, 7);
         system.Traffic().SetRate(0.0f);
         for (int i = 0; i < spec.capacityPersons; ++i) system.AddPassenger(0, building.floorCount - 1);

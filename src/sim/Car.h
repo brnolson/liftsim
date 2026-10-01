@@ -19,6 +19,17 @@ struct SafetyChain {
     bool Complete() const { return doorsLocked && governorOk && ucmOk; }
 };
 
+// The device that brought the car to an emergency stop. Different faults need
+// different devices: a car's safety gear only grips when the car moves down.
+enum class StoppingDevice {
+    None,
+    SafetyGear,     // descending overspeed: wedges grip the guide rails
+    RopeBrake,      // ascending overspeed: clamps the hoist ropes
+    MachineBrake    // unintended car movement: the brake on the traction machine
+};
+
+const char* ToString(StoppingDevice device);
+
 // Everything hanging from each side of the traction sheave at the current car
 // position (car or counterweight, hoist ropes, compensation, traveling cable).
 struct SuspensionLoads {
@@ -83,6 +94,7 @@ public:
 
     const DoorOperator&  Doors() const { return m_doors; }
     const SafetyChain&   Safety() const { return m_safety; }
+    StoppingDevice       StoppedBy() const { return m_stoppedBy; }
     const TractionState& Traction() const { return m_traction; }
     const ElevatorSpec&  Spec() const { return m_spec; }
     int   Id() const { return m_id; }
@@ -103,6 +115,7 @@ public:
 
 private:
     void UpdateSafety();
+    void EmergencyStop(StoppingDevice device, float decel);
     void UpdateTraction(float dt);
 
     int m_id;
@@ -111,6 +124,7 @@ private:
     MotionController m_motion;
     DoorOperator m_doors;
     SafetyChain m_safety;
+    StoppingDevice m_stoppedBy = StoppingDevice::None;
     TractionState m_traction;
 
     int   m_targetFloor = 0;

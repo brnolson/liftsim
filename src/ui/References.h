@@ -18,6 +18,8 @@ inline constexpr Reference kReferences[] = {
      "https://webstore.ansi.org/standards/csa/csaasmea172022b44"},
     {"CIBSE-D", "CIBSE Guide D: Transportation Systems in Buildings, 5th ed. (2020)",
      "https://www.cibsejournal.com/news/fifth-edition-of-guide-d-launched/"},
+    {"KONE-EN81", "KONE, Elevator standard EN 81-20 fact sheet (UCM, ascending car overspeed)",
+     "https://www.kone.com.au/Images/pdf_Safety%20Standard%20EN81-20%20Fact%20Sheet_tcm46-29613.pdf"},
     {"PETERS", "R. D. Peters, Ideal Lift Kinematics, Elevator Technology 6 (1995)",
      "https://liftescalatorlibrary.org/paper_indexing/abstract_pages/00000329.html"},
     {"BARNEY", "G. Barney & L. Al-Sharif, Elevator Traffic Handbook, 2nd ed., Routledge (2016)",
