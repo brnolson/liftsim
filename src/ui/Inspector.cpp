@@ -181,13 +181,13 @@ Inspector::Card Inspector::Describe(const sim::ElevatorSystem& system, const Bui
     default: {
         c.title = "Hall calls and group dispatch";
         c.about = {"Each hall call goes to the car with the lowest estimated time of",
-                   "arrival; assignments are reviewed every second. Waiting passengers",
-                   "queue at the assigned car. Click a floor to press its hall button."};
+                   "arrival; assignments are reviewed every second. Passengers wait by",
+                   "the buttons until a lantern lights. Click a floor to call a car."};
         for (const sim::Car& other : system.Cars())
             c.live.push_back(Fmt("Car %c  ETA to lobby %5.1f s   %s", 'A' + other.Id(),
                                  system.EstimateArrivalTime(other, 0, sim::Direction::Up), sim::ToString(other.mode)));
         c.equation = "ETA = d/v + (stops+1)(v/a + a/j) + stops * t_stop";
-        c.sources = {"BARNEY", "CIBSE-D", "PETERS"};
+        c.sources = {"BARNEY", "CIBSE-D", "DEMAND"};
         break;
     }
     }

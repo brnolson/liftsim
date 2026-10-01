@@ -47,10 +47,12 @@ glm::vec3 PeopleView::ExitPoint(const sim::Passenger& p) const {
     return {side * (m_layout.halfWidth - 2.0f), y, -1.5f + Hash01(p.id, 6) * 7.0f};
 }
 
-// Which car a waiting passenger should queue in front of.
+// Which car a waiting passenger should walk to, or -1 to wait in the common
+// area by the hall buttons. With conventional hall buttons passengers do not
+// know which car will come (the group controller's assignment is internal and
+// may change), so they only move to a car once it arrives and opens its doors
+// in their direction, signalled by the hall lantern.
 int PeopleView::CarServing(const sim::ElevatorSystem& system, int floor, sim::Direction d) const {
-    const sim::HallCall& call = system.GetHallCall(floor, d);
-    if (call.active && call.assignedCar >= 0) return call.assignedCar;
     for (const sim::Car& car : system.Cars()) {
         bool here = std::abs(car.Position() - m_layout.FloorY(floor)) < 0.2f;
         bool open = !car.Doors().IsClosed();
@@ -117,7 +119,11 @@ void PeopleView::Update(const sim::ElevatorSystem& system, float simDt) {
         person.position.y = person.target.y;
 
         // Normal walking pace, faster when catching up at high simulation speed.
+        // A boarding passenger must be inside within the simulation's transfer
+        // time (the doors may start closing after that), so they hurry if needed.
         float speed = std::min(std::max(kWalkSpeed, distance * 0.8f), 6.0f);
+        if (p.state == sim::PassengerState::Riding)
+            speed = std::max(speed, distance / system.Spec().transferTime);
         float step = std::min(distance, speed * simDt);
         bool walking = step > 1e-4f;
         if (walking) {

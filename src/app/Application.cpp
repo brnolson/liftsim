@@ -293,7 +293,7 @@ void Application::ApplyView(int view) {
     m_state.xray = false;
     m_state.following = false;
     switch (view) {
-    case 1:   // lobby: passengers queueing at the assigned car
+    case 1:   // lobby: passengers waiting by the hall buttons
         m_camera.Set({-1.0f, 1.6f, 1.5f}, -22.0f, 10.0f, 13.0f);
         break;
     case 2:   // machine room: traction machines, brakes, governors
