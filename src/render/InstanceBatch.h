@@ -8,14 +8,13 @@
 enum class Material : int;
 
 // Many copies of one mesh drawn with a single glDrawElementsInstanced call.
-// Each instance carries its own model matrix, color and wind-sway strength in
-// a per-instance vertex buffer (attribute divisor 1), so a whole city of
+// Each instance carries its own model matrix and color in a per-instance vertex buffer (attribute divisor 1), so a whole city of
 // towers or a street of trees costs one draw call instead of thousands.
 class InstanceBatch {
 public:
     struct Instance {
         glm::mat4 model;
-        glm::vec4 colorSway;   // rgb = sRGB albedo, a = wind sway strength (0 = rigid)
+        glm::vec3 color;       // sRGB albedo
     };
 
     InstanceBatch(const Mesh* mesh, Material material, Surface surface, bool castsShadow = true);
@@ -24,7 +23,7 @@ public:
     InstanceBatch& operator=(const InstanceBatch&) = delete;
 
     void Clear() { m_instances.clear(); }
-    void Add(const glm::mat4& model, const glm::vec3& color, float sway = 0.0f);
+    void Add(const glm::mat4& model, const glm::vec3& color);
     void Upload();          // copy instances to the GPU; call after changes
     void Draw() const;
 

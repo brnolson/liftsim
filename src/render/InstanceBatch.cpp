@@ -9,8 +9,8 @@ InstanceBatch::~InstanceBatch() {
     if (m_vbo) glDeleteBuffers(1, &m_vbo);
 }
 
-void InstanceBatch::Add(const glm::mat4& model, const glm::vec3& color, float sway) {
-    m_instances.push_back({model, glm::vec4(color, sway)});
+void InstanceBatch::Add(const glm::mat4& model, const glm::vec3& color) {
+    m_instances.push_back({model, color});
 }
 
 void InstanceBatch::Upload() {
@@ -38,7 +38,7 @@ void InstanceBatch::Draw() const {
         glVertexAttribDivisor(location, 1);
     }
     glEnableVertexAttribArray(7);
-    glVertexAttribPointer(7, 4, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(Instance, colorSway)));
+    glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(Instance, color)));
     glVertexAttribDivisor(7, 1);
 
     glDrawElementsInstanced(GL_TRIANGLES, m_mesh->GetIndexCount(), GL_UNSIGNED_INT, nullptr, m_uploaded);

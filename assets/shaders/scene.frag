@@ -149,12 +149,12 @@ vec3 ApplySurface(vec3 albedo, vec3 p, vec3 n) {
     return albedo;
 }
 
-// Keep in sync with SkyColor() in post.frag (which also draws clouds).
+// Keep in sync with SkyColor() in post.frag.
 vec3 SkyColor(vec3 dir) {
     float height = clamp(dir.y, 0.0, 1.0);
-    vec3 sky = mix(vec3(0.62, 0.72, 0.88), vec3(0.16, 0.34, 0.72), pow(height, 0.5));
-    vec3 ground = vec3(0.22, 0.21, 0.20);
-    sky = mix(ground, sky, smoothstep(-0.05, 0.02, dir.y));
+    vec3 haze = vec3(0.62, 0.72, 0.88);
+    vec3 sky = mix(haze, vec3(0.16, 0.34, 0.72), pow(height, 0.5));
+    sky = mix(haze * 0.85, sky, smoothstep(-0.3, 0.0, dir.y));
     float sun = pow(max(dot(dir, -uSunDir), 0.0), 900.0);
     return sky + sun * vec3(20.0, 18.0, 15.0);
 }

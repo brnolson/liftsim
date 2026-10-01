@@ -77,7 +77,6 @@ private:
     std::vector<DrawItem> m_items;
     std::vector<RayBox> m_rayBoxes;
     std::vector<const InstanceBatch*> m_batches;
-    float m_clock = 0.0f;         // wall-clock seconds, for wind, clouds and traffic
     std::mt19937 m_rng{7};
     float m_accumulator = 0.0f;
     float m_simAdvanced = 0.0f;   // simulated seconds covered by this frame

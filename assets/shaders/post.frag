@@ -13,43 +13,15 @@ uniform float uFar;
 uniform mat4  uInvViewProj;
 uniform vec3  uSunDir;
 uniform int   uOutlinesOn;
-uniform float uTime;
-
-float Hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-
-float Noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(Hash(i), Hash(i + vec2(1, 0)), u.x), mix(Hash(i + vec2(0, 1)), Hash(i + vec2(1, 1)), u.x), u.y);
-}
-
-float Fbm(vec2 p) {
-    float sum = 0.0, amplitude = 0.5;
-    for (int i = 0; i < 5; ++i) {
-        sum += amplitude * Noise(p);
-        p *= 2.1;
-        amplitude *= 0.5;
-    }
-    return sum;
-}
-
-// Clouds: intersect the view ray with a flat layer high above the city, then
-// threshold drifting fractal noise at that point. Thin out toward the horizon.
-vec3 AddClouds(vec3 sky, vec3 dir) {
-    if (dir.y <= 0.01) return sky;
-    vec2 layer = dir.xz / dir.y * 0.004 + vec2(uTime * 0.002, uTime * 0.0007);
-    float density = smoothstep(0.48, 0.75, Fbm(layer * 6.0));
-    float fade = smoothstep(0.02, 0.25, dir.y);
-    vec3 cloud = vec3(1.25, 1.22, 1.18) * (0.85 + 0.3 * Fbm(layer * 14.0));
-    return mix(sky, cloud, density * fade * 0.85);
-}
 
 // Keep in sync with SkyColor() in scene.frag.
 vec3 SkyColor(vec3 dir) {
     float height = clamp(dir.y, 0.0, 1.0);
-    vec3 sky = mix(vec3(0.62, 0.72, 0.88), vec3(0.16, 0.34, 0.72), pow(height, 0.5));
-    vec3 ground = vec3(0.22, 0.21, 0.20);
-    sky = mix(ground, sky, smoothstep(-0.05, 0.02, dir.y));
+    vec3 haze = vec3(0.62, 0.72, 0.88);
+    vec3 sky = mix(haze, vec3(0.16, 0.34, 0.72), pow(height, 0.5));
+    // Below the horizon the view only sees distant haze, so darken the horizon
+    // colour gently instead of switching to a ground colour (which shows as a seam).
+    sky = mix(haze * 0.85, sky, smoothstep(-0.3, 0.0, dir.y));
     float sun = pow(max(dot(dir, -uSunDir), 0.0), 900.0);
     return sky + sun * vec3(20.0, 18.0, 15.0);
 }
@@ -95,7 +67,7 @@ void main() {
     vec3 color;
 
     if (depth >= 1.0) {
-        color = AddClouds(SkyColor(viewDir), viewDir);
+        color = SkyColor(viewDir);
     } else {
         color = texture(uSceneColor, vUV).rgb;
         float distance = LinearDepth(depth);
@@ -103,9 +75,10 @@ void main() {
         if (uOutlinesOn == 1)
             color = mix(color, vec3(0.03, 0.03, 0.05), EdgeStrength(vUV, distance));
 
-        // Aerial perspective: distant geometry fades toward the horizon color.
-        float fog = 1.0 - exp(-distance * 0.0045);
-        color = mix(color, SkyColor(vec3(viewDir.x, 0.05, viewDir.z)), fog * 0.7);
+        // Aerial perspective: exponential fog, 1 - e^(-density * distance), toward the
+        // horizon colour. Capped so even the farthest buildings keep their shape.
+        float fog = min(1.0 - exp(-distance * 0.0008), 0.35);
+        color = mix(color, SkyColor(vec3(viewDir.x, 0.0, viewDir.z)), fog);
     }
 
     color = ToneMapACES(color * 0.9);

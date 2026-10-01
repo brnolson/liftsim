@@ -115,7 +115,6 @@ void Renderer::ShadowPass(const FrameData& frame, const glm::mat4& lightViewProj
     Shader& s = m_shadowShader;
     s.Use();
     s.SetMat4("uLightViewProj", lightViewProj);
-    s.SetFloat("uTime", frame.time);
     s.SetInt("uInstanced", 0);
     for (const DrawItem& item : *frame.items) {
         if (!item.castsShadow) continue;
@@ -148,7 +147,6 @@ void Renderer::ScenePass(const FrameData& frame, const glm::mat4& lightViewProj)
     s.SetVec3("uCameraPos", frame.cameraPos);
     s.SetVec3("uSunDir", m_sunDir);
     s.SetVec3("uSunColor", m_sunColor);
-    s.SetFloat("uTime", frame.time);
     s.SetInt("uShadowsOn", frame.settings.shadows ? 1 : 0);
     s.SetInt("uRayTracingOn", frame.settings.rayTracedReflections ? 1 : 0);
     glActiveTexture(GL_TEXTURE0);
@@ -208,7 +206,6 @@ void Renderer::PostPass(const FrameData& frame) {
     s.SetMat4("uInvViewProj", glm::inverse(frame.projection * frame.view));
     s.SetVec3("uSunDir", m_sunDir);
     s.SetInt("uOutlinesOn", frame.settings.outlines ? 1 : 0);
-    s.SetFloat("uTime", frame.time);
 
     glBindVertexArray(m_emptyVao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

@@ -42,7 +42,6 @@ struct FrameData {
     const std::vector<DrawItem>* items = nullptr;
     const std::vector<RayBox>*   rayBoxes = nullptr;
     const std::vector<const InstanceBatch*>* batches = nullptr;   // instanced environment
-    float     time = 0.0f;         // seconds, drives wind and clouds
     glm::mat4 view{1.0f}, projection{1.0f};
     glm::vec3 cameraPos{0.0f};
     float     nearPlane = 0.1f, farPlane = 500.0f;

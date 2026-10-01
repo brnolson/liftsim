@@ -14,7 +14,6 @@ constexpr float kCityExtent = 300.0f;
 constexpr float kFirstRoadX = 30.0f;
 constexpr float kFirstRoadZ = 17.0f;
 constexpr float kRoadTop = -0.15f;     // 15 cm curb below the sidewalks
-constexpr int   kVehicleCount = 140;
 // Downtown sits behind the site as seen from the default camera, so the
 // skyline forms a backdrop; blocks next to the site stay low-rise.
 const glm::vec2 kDowntown{140.0f, -170.0f};
@@ -45,9 +44,6 @@ Environment::Environment(const BuildingLayout& layout, const MeshLibrary& meshes
       m_trunks(&meshes.cylinder, Material::Matte, Surface::Wood),
       m_canopies(&meshes.sphere, Material::Matte, Surface::Foliage),
       m_lampPoles(&meshes.cylinder, Material::Metal, Surface::BrushedMetal),
-      m_carBodies(&meshes.cube, Material::Metal, Surface::Plain),
-      m_carCabins(&meshes.cube, Material::Metal, Surface::Plain),
-      m_wheels(&meshes.cylinder, Material::Matte, Surface::Plain),
       m_pots(&meshes.cylinder, Material::Matte, Surface::Concrete),
       m_planters(&meshes.cube, Material::Matte, Surface::Wood),
       m_plants(&meshes.sphere, Material::Matte, Surface::Foliage),
@@ -55,8 +51,6 @@ Environment::Environment(const BuildingLayout& layout, const MeshLibrary& meshes
     BuildSiteGrounds();
     BuildStreets();
     BuildIndoorPlants();
-    SpawnTraffic();
-    RebuildTraffic();
 }
 
 void Environment::AddGround(InstanceBatch& batch, const glm::vec3& min, const glm::vec3& max, const glm::vec3& color) {
@@ -215,12 +209,12 @@ void Environment::AddTree(const glm::vec3& base, float scale) {
     m_trunks.Add(SceneBuilder::SegmentTransform(base, base + glm::vec3(0.0f, trunkHeight, 0.0f), 0.13f * scale),
                  {0.42f, 0.30f, 0.20f});
     glm::vec3 leaves(0.32f + unit(m_rng) * 0.1f, 0.52f + unit(m_rng) * 0.1f, 0.26f);
-    // Two overlapping blobs read as a crown; sway is applied in the vertex shader.
+    // Two overlapping blobs read as a crown.
     m_canopies.Add(SceneBuilder::BoxTransform(base + glm::vec3(0.0f, trunkHeight + 0.8f * scale, 0.0f), glm::vec3(2.6f, 2.2f, 2.6f) * scale),
-                   leaves, 1.0f);
+                   leaves);
     m_canopies.Add(SceneBuilder::BoxTransform(base + glm::vec3(0.4f * scale, trunkHeight + 1.7f * scale, -0.3f * scale),
                                               glm::vec3(1.8f, 1.6f, 1.8f) * scale),
-                   leaves * 1.1f, 1.0f);
+                   leaves * 1.1f);
 }
 
 void Environment::AddPottedPlant(const glm::vec3& base, float scale) {
@@ -230,8 +224,7 @@ void Environment::AddPottedPlant(const glm::vec3& base, float scale) {
     for (int i = 0; i < 3; ++i) {
         float angle = i * 2.094f + unit(m_rng);
         glm::vec3 offset(std::cos(angle) * 0.18f, 0.75f + i * 0.22f, std::sin(angle) * 0.18f);
-        // Indoor air barely moves: a small sway strength.
-        m_plants.Add(SceneBuilder::BoxTransform(base + offset * scale, glm::vec3(0.55f, 0.6f, 0.55f) * scale), leaves, 0.25f);
+        m_plants.Add(SceneBuilder::BoxTransform(base + offset * scale, glm::vec3(0.55f, 0.6f, 0.55f) * scale), leaves);
     }
 }
 
@@ -253,85 +246,21 @@ void Environment::BuildIndoorPlants() {
         m_planters.Add(SceneBuilder::BoxTransform(base + glm::vec3(0.0f, 0.3f, 0.0f), {1.4f, 0.6f, 1.4f}), {0.55f, 0.38f, 0.24f});
         m_indoorTrunks.Add(SceneBuilder::SegmentTransform(base + glm::vec3(0.0f, 0.6f, 0.0f), base + glm::vec3(0.0f, 2.0f, 0.0f), 0.07f),
                            {0.42f, 0.30f, 0.20f});
-        m_plants.Add(SceneBuilder::BoxTransform(base + glm::vec3(0.0f, 2.4f, 0.0f), {1.3f, 1.1f, 1.3f}), {0.30f, 0.55f, 0.28f}, 0.3f);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Road traffic: cars drive along the road centerlines in their lane and wrap
-// around at the edge of the city. Purely decorative (no junction logic).
-// ---------------------------------------------------------------------------
-void Environment::SpawnTraffic() {
-    static const glm::vec3 paint[] = {
-        {0.80f, 0.12f, 0.10f}, {0.12f, 0.25f, 0.60f}, {0.92f, 0.92f, 0.90f}, {0.10f, 0.10f, 0.11f},
-        {0.55f, 0.57f, 0.60f}, {0.90f, 0.70f, 0.10f}, {0.20f, 0.45f, 0.30f}};
-    const std::vector<float> xRoads = RoadLines(kFirstRoadX), zRoads = RoadLines(kFirstRoadZ);
-    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
-
-    for (int i = 0; i < kVehicleCount; ++i) {
-        Vehicle v;
-        v.alongX = unit(m_rng) < 0.5f;
-        const std::vector<float>& lines = v.alongX ? zRoads : xRoads;
-        v.roadLine = lines[static_cast<size_t>(unit(m_rng) * lines.size()) % lines.size()];
-        v.lane = (unit(m_rng) < 0.5f ? -1.0f : 1.0f) * 3.0f;
-        v.position = (unit(m_rng) * 2.0f - 1.0f) * kCityExtent;
-        v.speed = 8.0f + unit(m_rng) * 6.0f;
-        v.color = paint[i % 7];
-        m_vehicles.push_back(v);
-    }
-}
-
-void Environment::Update(float dt) {
-    for (Vehicle& v : m_vehicles) {
-        float direction = v.lane > 0.0f ? 1.0f : -1.0f;   // drive on the right
-        v.position += direction * v.speed * dt;
-        if (v.position > kCityExtent) v.position -= 2.0f * kCityExtent;
-        if (v.position < -kCityExtent) v.position += 2.0f * kCityExtent;
-    }
-    RebuildTraffic();
-    m_carBodies.Upload();
-    m_carCabins.Upload();
-    m_wheels.Upload();
-}
-
-void Environment::RebuildTraffic() {
-    m_carBodies.Clear();
-    m_carCabins.Clear();
-    m_wheels.Clear();
-    const float halfPi = 1.5707963f;
-
-    for (const Vehicle& v : m_vehicles) {
-        float direction = v.lane > 0.0f ? 1.0f : -1.0f;
-        // Right-hand traffic: facing +x the right side is +z; facing +z it is -x.
-        glm::vec3 position = v.alongX ? glm::vec3(v.position, kRoadTop, v.roadLine + v.lane)
-                                      : glm::vec3(v.roadLine - v.lane, kRoadTop, v.position);
-        float yaw = v.alongX ? (direction > 0.0f ? 0.0f : 2.0f * halfPi) : (direction > 0.0f ? -halfPi : halfPi);
-        glm::mat4 car = glm::rotate(glm::translate(glm::mat4(1.0f), position), yaw, glm::vec3(0, 1, 0));
-
-        // Car-local frame: +x forward, +y up.
-        m_carBodies.Add(glm::scale(glm::translate(car, {0.0f, 0.65f, 0.0f}), {4.4f, 0.75f, 1.85f}), v.color);
-        m_carCabins.Add(glm::scale(glm::translate(car, {-0.3f, 1.3f, 0.0f}), {2.3f, 0.6f, 1.65f}), {0.12f, 0.15f, 0.20f});
-        for (float wx : {-1.4f, 1.4f}) {
-            for (float wz : {-0.85f, 0.85f}) {
-                glm::mat4 wheel = glm::translate(car, {wx, 0.34f, wz});
-                wheel = glm::rotate(wheel, halfPi, glm::vec3(1, 0, 0));          // axle across the car
-                m_wheels.Add(glm::scale(wheel, {0.66f, 0.26f, 0.66f}), {0.08f, 0.08f, 0.09f});
-            }
-        }
+        m_plants.Add(SceneBuilder::BoxTransform(base + glm::vec3(0.0f, 2.4f, 0.0f), {1.3f, 1.1f, 1.3f}), {0.30f, 0.55f, 0.28f});
     }
 }
 
 // ---------------------------------------------------------------------------
 void Environment::Upload() {
     for (InstanceBatch* batch : {&m_sidewalks, &m_grass, &m_asphalt, &m_markings, &m_towers, &m_penthouses,
-                                 &m_trunks, &m_canopies, &m_lampPoles, &m_carBodies, &m_carCabins, &m_wheels,
+                                 &m_trunks, &m_canopies, &m_lampPoles,
                                  &m_pots, &m_planters, &m_plants, &m_indoorTrunks})
         batch->Upload();
 }
 
 void Environment::CollectBatches(bool xray, std::vector<const InstanceBatch*>& out) const {
     out = {&m_sidewalks, &m_grass, &m_asphalt, &m_markings, &m_towers, &m_penthouses, &m_trunks,
-           &m_canopies, &m_lampPoles, &m_carBodies, &m_carCabins, &m_wheels};
+           &m_canopies, &m_lampPoles};
     if (!xray) {
         for (const InstanceBatch* indoor : {&m_pots, &m_planters, &m_plants, &m_indoorTrunks}) out.push_back(indoor);
     }
@@ -344,7 +273,7 @@ void Environment::AppendRayBoxes(std::vector<RayBox>& boxes) const {
 int Environment::InstanceCount() const {
     int total = 0;
     for (const InstanceBatch* batch : {&m_sidewalks, &m_grass, &m_asphalt, &m_markings, &m_towers, &m_penthouses,
-                                       &m_trunks, &m_canopies, &m_lampPoles, &m_carBodies, &m_carCabins, &m_wheels,
+                                       &m_trunks, &m_canopies, &m_lampPoles,
                                        &m_pots, &m_planters, &m_plants, &m_indoorTrunks})
         total += batch->Count();
     return total;

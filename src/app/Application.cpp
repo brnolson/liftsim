@@ -112,8 +112,6 @@ void Application::Run() {
 
         HandleEvents();
         if (!screenshotMode) StepSimulation(frameDt);
-        m_clock += frameDt;
-        m_environment.Update(frameDt);
         m_people.Update(m_system, m_simAdvanced);
         m_hud.Record(m_system, m_state.selectedCar);
         UpdateCamera(screenshotMode ? 10.0f : frameDt);   // screenshots snap straight to the target
@@ -342,7 +340,6 @@ void Application::RenderFrame() {
     frame.items = &m_items;
     frame.rayBoxes = &m_rayBoxes;
     frame.batches = &m_batches;
-    frame.time = m_clock;
     frame.view = m_camera.View();
     frame.projection = m_camera.Projection(static_cast<float>(m_width) / std::max(m_height, 1));
     frame.cameraPos = m_camera.Position();

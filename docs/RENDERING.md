@@ -47,16 +47,16 @@ Back-face culling is disabled in this pass so thin panels cast shadows from both
 - **Aerial perspective:** `1 − e^(−k·distance)` fog toward the horizon color.
 - **ACES filmic tone mapping** (Narkowicz fit), then gamma 2.2, then a light vignette.
 
-## 4. Environment: instancing, procedural surfaces, wind, clouds
+## 4. Environment: instancing and procedural surfaces
 
 The surroundings are decoration, drawn with techniques that keep them cheap and asset-free.
 
-**GPU instancing** (`InstanceBatch`, `Environment`). The city uses thousands of copies of three unit meshes: 172 towers, 1,103 street trees, 320 lamp posts, 140 cars, 3,500 pieces of road paint, and indoor plants on every floor, about 8,900 instances in total.
+**GPU instancing** (`InstanceBatch`, `Environment`). The city uses thousands of copies of three unit meshes: 172 towers, 1,103 street trees, 320 lamp posts, 3,500 pieces of road paint, and indoor plants on every floor, about 8,000 instances in total.
 
-- Each batch uploads a per-instance vertex buffer (model matrix + color + sway) and draws every copy with a single `glDrawElementsInstanced` call.
+- Each batch uploads a per-instance vertex buffer (model matrix + color) and draws every copy with a single `glDrawElementsInstanced` call.
 - The model matrix is a `mat4` attribute occupying locations 3–6. `glVertexAttribDivisor(loc, 1)` advances it once per instance instead of once per vertex.
-- Static batches upload once. Traffic is rebuilt and re-uploaded every frame.
-- The whole environment costs 16 draw calls per pass instead of about 8,900.
+- Every batch is static: it uploads once at start-up.
+- The whole environment costs 13 draw calls per pass instead of about 8,000.
 
 **Procedural solid texturing** (`ApplySurface` in `scene.frag`). No image files; each surface is a function of world position:
 
@@ -75,14 +75,6 @@ The surroundings are decoration, drawn with techniques that keep them cheap and 
 
 **Anti-aliasing procedural detail** (`Detail()`). A procedural pattern has no mipmaps, so detail smaller than a pixel would shimmer. `fwidth(worldPos)` measures how far the surface moves across one pixel. When a pattern's period falls below about a pixel, its contribution is faded out. This is the procedural equivalent of mipmapping.
 
-**Vertex-shader wind** (`Wind()` in `scene.vert` and `shadow.vert`). Foliage vertices are displaced by `strength · h² · (sin(t + φ), 0, cos(t + φ))`:
-
-- h is the height above the instance origin, so trunks and pots stay fixed while crowns bend.
-- φ is a phase derived from the instance position, so trees don't sway in unison.
-- The shadow pass applies the same displacement, so shadows move with the leaves.
-
-**Clouds** (`AddClouds()` in `post.frag`). For sky pixels, the view ray is intersected with a flat cloud layer: `uv = dir.xz / dir.y`. Drifting FBM at that point is thresholded with `smoothstep` into cloud density, and faded toward the horizon.
-
 ## 5. Techniques outside the shaders
 
 | Technique | Where |
@@ -99,7 +91,7 @@ The surroundings are decoration, drawn with techniques that keep them cheap and 
 
 ## Performance
 
-About 2,000 individual draw items for the building, elevators and people, plus 16 instanced batches holding about 8,900 environment instances. Everything is drawn in both the shadow and scene passes. It runs at about 110–150 fps at 1600×900 on an integrated AMD Radeon GPU. The next optimizations would be:
+About 2,000 individual draw items for the building, elevators and people, plus 13 instanced batches holding about 8,000 environment instances. Everything is drawn in both the shadow and scene passes. It runs at about 110–150 fps at 1600×900 on an integrated AMD Radeon GPU. The next optimizations would be:
 
 - instancing the building's repeated parts too (door panels, people, rails);
 - merging static geometry into a single vertex buffer;
