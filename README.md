@@ -11,22 +11,22 @@ LiftSim models a 25-storey office tower served by four 2.5 m/s gearless traction
 | Component inspector: traction machine | Roping geometry (158° wrap) | Pit: buffers and compensation |
 |---|---|---|
 | ![Machine](docs/images/inspect-machine.png) | ![Ropes](docs/images/inspect-ropes.png) | ![Pit](docs/images/inspect-pit.png) |
-| **Governor trip after an injected drive fault** | **Lobby: queueing at the assigned car** | **Following a car (x-ray)** |
+| **Governor trip after an injected drive fault** | **Lobby: passengers boarding at the lit lanterns** | **Following a car (x-ray)** |
 | ![Governor trip](docs/images/governor-trip.png) | ![Lobby](docs/images/lobby.png) | ![Follow](docs/images/follow-car.png) |
 
 ## What it simulates
 
 | Subsystem | Model |
 |---|---|
-| **Motion** | Jerk-limited S-curve profile generator driven by distance-to-go, a speed regulator with feed-forward and look-ahead, and a jerk limiter. Every trip stays within 2.5 m/s, 1.0 m/s² and 1.5 m/s³ and levels within ±3 mm (EN 81-20 requires ±10 mm). |
-| **Traction drive** | Rope tensions on both sides of the sheave, including hoist-rope, compensation-chain and traveling-cable masses at the current car position; machine torque and power; energy drawn and regenerated; and a rope-slip check with the Euler–Eytelwein (capstan) equation, using a wrap angle computed from the sheave and deflector geometry (158°). |
+| **Motion** | Jerk-limited S-curve profile generator driven by distance-to-go, a speed regulator with feed-forward and look-ahead, and a jerk limiter. Every trip stays within 2.5 m/s, 1.0 m/s² and 1.5 m/s³ and, after a jerk-limited final stop, lands within 0.3 mm (EN 81-20 requires ±10 mm). |
+| **Traction drive** | Rope tensions on both sides of the sheave, including hoist-rope, compensation-chain and traveling-cable masses at the current car position; machine torque and power; energy drawn and regenerated; and a rope-slip check with the Euler–Eytelwein (capstan) equation for normal operation, using a wrap angle computed from the sheave and deflector geometry (158°). |
 | **Compensation** | Over 86 m of travel the hoist ropes alone swing the balance by about 600 kg. Chains hung under the car and counterweight cancel it (a unit test shows 554 kg reduced to 48 kg). |
-| **Pit buffers** | Oil buffers with the EN 81-20 minimum stroke `0.0674·v²` (0.42 m at 2.5 m/s). |
+| **Hoistway** | Oil buffers with the EN 81-20 minimum stroke `0.0674·v²` (0.42 m at 2.5 m/s). Overhead, pit depth and counterweight clearances are derived from the buffer stroke, run-by and EN 81 clearance rules. |
 | **Doors** | Center-opening operator with eased panel motion. The car door drives the landing door through a coupler. A light curtain reopens the doors while closing. |
-| **Safety chain** | Door interlocks, an overspeed governor (trips at 115 % of rated speed and sets the safety gear), and unintended car movement (UCM) detection. The drive only runs with the chain closed. |
+| **Safety chain** | Door interlocks, an overspeed governor (trips at 115 % of rated speed: the safety gear stops a descending car, a rope brake an ascending one), and unintended car movement (UCM) detection with the machine brake stopping the car within 1.2 m. The drive only runs with the chain closed. |
 | **Group control** | Selective collective control (SCAN) per car. Hall calls are assigned by estimated time of arrival (ETA) and reallocated dynamically. Full cars (>80 %) bypass hall calls, and idle cars park at the lobby during up-peak. |
 | **Traffic** | Poisson passenger arrivals for up-peak, down-peak, lunch and interfloor patterns. KPIs: average and maximum wait, journey time, % of waits over 60 s, energy. |
-| **Fault injection** | Press `O` to lose drive control: the car freewheels toward the heavier side until the governor trips and the safety gear stops it. Press `R` to reset and run a rescue relevel. |
+| **Fault injection** | Press `O` to lose drive control: the car freewheels toward the heavier side until the governor trips. An empty car rises and the rope brake stops it; a full car falls and the safety gear stops it. Press `R` to reset and run a rescue relevel. |
 
 ## Component inspector and sources
 
@@ -51,13 +51,12 @@ Every simulation requirement has an ID, a source, and a verifying test ([docs/RE
 
 - **Three-pass pipeline:** sun shadow map, then a forward scene pass into an HDR G-buffer (color + normals), then post-processing.
 - **Toon shading** with hemisphere ambient, **PCF soft shadows**, and **ink outlines** from depth and normal discontinuities.
-- **Hybrid ray tracing:** metal and polished surfaces trace a reflection ray in the fragment shader against a live box scene (cars, counterweights, slabs, nearby people) using the slab test, with Schlick Fresnel weighting.
+- **Hybrid ray tracing:** metal and polished surfaces trace a reflection ray in the fragment shader against a live box scene (cars, counterweights, slabs, nearby towers) using the slab test, with Schlick Fresnel weighting.
 - **Ray picking:** clicking the screen casts a ray to select a car or call a car to a floor. It uses the same slab algorithm on the CPU.
 - **Procedural animation:** passengers are forward-kinematics skeletons with a distance-driven walk cycle (no foot sliding). Sheaves, deflectors and governors spin at the true rope speed. The traveling cable's U-loop is solved from its fixed length.
 - **Dollhouse cut-away:** walls facing the camera are culled so the building always opens toward the viewer. X-ray mode strips the architecture down to the equipment.
-- **GPU instancing:** the surrounding city (172 towers, 1,100 street trees, 140 moving cars, road markings and indoor plants on every floor, about 8,900 instances) is drawn with 16 instanced draw calls.
+- **GPU instancing:** the surrounding city (172 towers, 1,100 street trees, road markings and indoor plants on every floor, about 8,000 instances) is drawn with 13 instanced draw calls.
 - **Procedural textures, no image files:** concrete, terrazzo, carpet tiles, wood grain, brushed steel, asphalt, grass and window facades are generated in the shader from 3D noise and box projection. Detail is anti-aliased with `fwidth`.
-- **Vertex-shader wind** on trees and plants (the shadows sway too) and **FBM clouds** in the sky.
 - ACES tone mapping, aerial fog, gamma correction.
 
 ## Build
@@ -100,7 +99,7 @@ src/sim/      Simulation core. Plain C++, no graphics, fully unit-tested.
   ElevatorSystem        group controller: hall calls, ETA dispatch, boarding, KPIs
   Traffic               Poisson traffic generator
 src/view/     Turns simulation state into things to draw.
-  Environment           instanced city, streets, trees, traffic, indoor plants
+  Environment           instanced city, streets, trees, indoor plants
   BuildingLayout        world-space positions of everything (single source of truth)
   SceneBuilder          building, cars, machines, ropes -> draw items + ray-trace boxes
   PeopleView            passenger placement, walking, FK skeleton animation
@@ -127,9 +126,10 @@ Suggested reading order: `ElevatorSpec.h` → `MotionController.cpp` → `Car.cp
 [ OK ] REQ-DSP-01  Dispatcher flight-time estimate within 25% of the simulated run
 [ OK ] REQ-DOR-01  Doors reverse when the light curtain is interrupted while closing
 [ OK ] REQ-SAF-01  Car cannot start while the safety chain is open (doors unlocked)
-[ OK ] REQ-SAF-02  Overspeed governor trips at 115% and the safety gear stops the car
-[ OK ] REQ-SAF-03  Unintended car movement with doors open is detected and stopped
-[ OK ] REQ-TRC-01  Ropes never slip: tension ratio under e^(f*alpha) at full load
+[ OK ] REQ-SAF-02a  Ascending overspeed: governor trips at 115%, the rope brake stops the empty car
+[ OK ] REQ-SAF-02b  Descending overspeed: governor trips at 115%, the safety gear stops the full car
+[ OK ] REQ-SAF-03  Unintended car movement with doors open: machine brake stops it within 1.2 m
+[ OK ] REQ-TRC-01  Normal operation: tension ratio under e^(f*alpha) with a full car
 [ OK ] REQ-TRC-02  Compensation chains cancel the hoist-rope imbalance over the full travel
 [ OK ] REQ-ENG-01  An empty car running up regenerates energy
 [ OK ] REQ-DSP-02  Every passenger is delivered to the right floor (up-peak, 120 people)
