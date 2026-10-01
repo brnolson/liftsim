@@ -129,8 +129,10 @@ void SceneBuilder::BuildStatic() {
         m_tagArchitecture = false;
     }
 
-    // Hoistway side walls, back wall, pit floor.
-    float wallTop = roofY;
+    // Hoistway side walls, back wall, pit floor. The hoistway walls run up to
+    // the machine-room floor, which is higher than the office roof (overhead).
+    const float machineFloorY = L.MachineRoomFloorY();
+    float wallTop = machineFloorY;
     m_tagArchitecture = true;
     for (float side : {-1.0f, 1.0f}) {
         AddWall({side * (B + 0.1f), (wallTop - L.pitDepth) * 0.5f, L.backZ * 0.5f},
@@ -145,11 +147,13 @@ void SceneBuilder::BuildStatic() {
     m_staticRayBoxes.push_back({{backCenter - backSize * 0.5f, backCenter + backSize * 0.5f}, kHoistwayWall});
     AddStatic({0.0f, -L.pitDepth - 0.15f, L.backZ * 0.5f}, {2.0f * B, 0.3f, hoistwayDepth}, kSlab, Material::Matte, Surface::Concrete);
 
-    // Car and counterweight guide rails for each hoistway.
+    // Car and counterweight guide rails for each hoistway, from the pit floor
+    // to just under the machine-room slab.
+    const float railTop = machineFloorY - t;
     for (int c = 0; c < L.spec.carCount; ++c) {
         float x = L.ShaftX(c);
-        float railHeight = roofY + L.pitDepth;
-        float railY = (roofY - L.pitDepth) * 0.5f;
+        float railHeight = railTop + L.pitDepth;
+        float railY = (railTop - L.pitDepth) * 0.5f;
         for (float side : {-1.0f, 1.0f}) {
             AddStatic({x + side * L.carRailOffset, railY, L.carCenterZ}, {0.06f, railHeight, 0.12f}, kRail);
             AddStatic({x + side * (L.cwtWidth * 0.5f + 0.1f), railY, L.cwtCenterZ}, {0.05f, railHeight, 0.08f}, kRail);
@@ -167,14 +171,18 @@ void SceneBuilder::BuildStatic() {
     m_tagArchitecture = false;
     AddStatic({0.0f, roofY + 0.5f, L.frontZ}, {2.0f * W + 0.4f, 1.0f, 0.2f}, kSpandrel, Material::Matte, Surface::Concrete);
 
-    float mrHalf = B + 0.8f, mrH = L.machineRoomHeight, mrFront = 0.8f;
+    // Machine room on the roof. Its walls start at the office roof and enclose
+    // both the extra hoistway overhead and the room itself.
+    float mrHalf = B + 0.8f, mrFront = 0.8f;
+    float mrTop = machineFloorY + L.machineRoomHeight;
+    float mrH = mrTop - roofY;
     float mrDepth = mrFront - L.backZ, mrZ = (mrFront + L.backZ) * 0.5f, mrY = roofY + mrH * 0.5f;
     AddWall({0.0f, mrY, L.backZ - 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, -1}, Material::Matte, Surface::Concrete);
     AddWall({0.0f, mrY, mrFront + 0.1f}, {2.0f * mrHalf, mrH, 0.2f}, kSpandrel, {0, 0, 1}, Material::Matte, Surface::Concrete);
     AddWall({-mrHalf - 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {-1, 0, 0}, Material::Matte, Surface::Concrete);
     AddWall({mrHalf + 0.1f, mrY, mrZ}, {0.2f, mrH, mrDepth}, kSpandrel, {1, 0, 0}, Material::Matte, Surface::Concrete);
-    AddWall({0.0f, roofY + mrH + 0.1f, mrZ}, {2.0f * mrHalf + 0.4f, 0.2f, mrDepth + 0.4f}, kSlab, {0, 1, 0}, Material::Matte, Surface::Concrete);
-    AddStatic({0.0f, roofY + mrH - 0.1f, mrZ}, {0.2f, 0.2f, mrDepth}, kSteelDark);   // hoisting beam
+    AddWall({0.0f, mrTop + 0.1f, mrZ}, {2.0f * mrHalf + 0.4f, 0.2f, mrDepth + 0.4f}, kSlab, {0, 1, 0}, Material::Matte, Surface::Concrete);
+    AddStatic({0.0f, mrTop - 0.1f, mrZ}, {0.2f, 0.2f, mrDepth}, kSteelDark);   // hoisting beam
 
 }
 
@@ -252,6 +260,31 @@ void SceneBuilder::AddCar(const sim::Car& car, bool selected, std::vector<DrawIt
     }
     items.push_back(Box({x, y + h + 0.35f, z}, {w + 0.35f, 0.2f, 0.24f}, accent));
 
+    // Toe guard (apron) under the car sill, EN 81-20 minimum 0.75 m. It closes
+    // the gap to the hoistway if the car stops above a landing with doors open.
+    items.push_back(Box({x, y - L.elevator.toeGuardHeight * 0.5f, front - 0.02f},
+                        {L.doorWidth + 0.2f, L.elevator.toeGuardHeight, 0.03f}, kSteelDark));
+
+    // Safety gear and its linkage. The governor rope is clamped to a lever on
+    // the car; a synchronising shaft across the crosshead and two lift rods down
+    // the stiles connect it to a safety gear on each guide rail. If the governor
+    // locks its rope while the car moves down, the rope holds the lever back, the
+    // rods lift, and wedges in both gears pinch the rails at the same time.
+    const glm::vec3 gov = L.GovernorCenter(car.Id());
+    const float leverY = y + h + 0.35f;
+    const float ropeZ = gov.z + L.GovernorRadius();              // the governor rope leg on the car side
+    const float stileX = w * 0.5f + 0.09f;
+    const bool gearSet = car.StoppedBy() == sim::StoppingDevice::SafetyGear;
+    const glm::vec3 gearColor = gearSet ? kFault : kGovernor;
+    items.push_back(Box({gov.x, leverY, ropeZ}, {0.06f, 0.1f, 0.06f}, gearColor));                       // rope clamp
+    items.push_back(Segment({gov.x, leverY, ropeZ}, {x - stileX, leverY, z + 0.15f}, 0.015f, gearColor)); // lever
+    items.push_back(Segment({x - stileX, leverY, z + 0.15f}, {x + stileX, leverY, z + 0.15f}, 0.015f, gearColor));
+    for (float side : {-1.0f, 1.0f}) {
+        float gearX = x + side * (L.carRailOffset - 0.09f);
+        items.push_back(Segment({x + side * stileX, leverY, z + 0.15f}, {x + side * stileX, y + 0.22f, z + 0.15f}, 0.012f, gearColor));
+        items.push_back(Box({gearX, y + 0.12f, z}, {0.18f, 0.2f, 0.26f}, gearSet ? kFault : kSteelDark));
+    }
+
     // Cab: wood back wall, stainless side walls, ceiling with a light panel.
     items.push_back(Box({x, y + h * 0.5f, z - d * 0.5f + 0.03f}, {w, h, 0.06f}, kWoodPanel, Material::Matte, Surface::Wood));
     for (float side : {-1.0f, 1.0f})
@@ -308,17 +341,17 @@ void SceneBuilder::AddCounterweight(const sim::Car& car, std::vector<DrawItem>& 
 void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items) const {
     const BuildingLayout& L = m_layout;
     const sim::TractionState& tr = car.Traction();
-    const float roofY = L.RoofY();
+    const float floorY = L.MachineRoomFloorY();
     const glm::vec3 sheave = L.SheaveCenter(car.Id());
     const glm::vec3 deflector = L.DeflectorCenter(car.Id());
     const float r = L.SheaveRadius(), rd = L.DeflectorRadius();
     const glm::vec3 xAxis(1, 0, 0);
 
     // Bedplate, motor, traction sheave (gearless machine, axis along x).
-    items.push_back(Box({sheave.x, roofY + 0.2f, sheave.z}, {1.3f, 0.4f, 1.0f}, kMachine));
+    items.push_back(Box({sheave.x, floorY + 0.2f, sheave.z}, {1.3f, 0.4f, 1.0f}, kMachine));
     items.push_back(Segment(sheave + glm::vec3(0.2f, 0, 0), sheave + glm::vec3(0.7f, 0, 0), 0.42f, kMachine));
     items.push_back(Segment(sheave + glm::vec3(-0.15f, 0, 0), sheave + glm::vec3(0.15f, 0, 0), r, kSteelDark));
-    items.push_back(Box({sheave.x, (roofY + 0.4f + sheave.y - 0.3f) * 0.5f, sheave.z}, {0.5f, sheave.y - roofY - 0.7f, 0.5f}, kMachine));
+    items.push_back(Box({sheave.x, (floorY + 0.4f + sheave.y - 0.3f) * 0.5f, sheave.z}, {0.5f, sheave.y - floorY - 0.7f, 0.5f}, kMachine));
 
     // Painted index mark on the sheave face shows it turning (also how rope creep is checked).
     auto spinningMark = [&](const glm::vec3& center, float radius, float angle, float faceOffset) {
@@ -337,14 +370,15 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
         items.push_back(Box(sheave + glm::vec3(0.175f, 0.0f, side * (r * 0.85f + 0.07f)), {0.1f, 0.3f, 0.12f}, brakeColor));
 
     // Deflector sheave in the top of the hoistway.
-    items.push_back(Segment(deflector + glm::vec3(-0.1f, 0, 0), deflector + glm::vec3(0.1f, 0, 0), rd, kSteelDark));
-    spinningMark(deflector, rd, tr.sheaveAngle * r / rd, -0.11f);
+    items.push_back(Segment(deflector + glm::vec3(-0.14f, 0, 0), deflector + glm::vec3(0.14f, 0, 0), rd, kSteelDark));
+    spinningMark(deflector, rd, tr.sheaveAngle * r / rd, -0.15f);
 
-    // Hoist ropes, three strands. Path from the car up: vertical to the front of
-    // the traction sheave, over its top, along the external tangent down to the
-    // deflector, over the deflector, then vertically down to the counterweight.
+    // Hoist ropes, one strand per rope (ElevatorSpec::hoistRopeCount). Path
+    // from the car up: vertical to the front of the traction sheave, over its
+    // top, along the external tangent down to the deflector, over the
+    // deflector, then vertically down to the counterweight.
     const float tangent = L.elevator.RopeTangentAngle();
-    const float carHitch = car.Position() + L.carHeight + 0.45f;
+    const float carHitch = car.Position() + L.CarHitchHeight();
     const float cwtHitch = L.CounterweightBottomY(car.Position()) + L.cwtHeight;
     auto onCircle = [](const glm::vec3& c, float radius, float angle, float x) {
         return glm::vec3(x, c.y + radius * std::sin(angle), c.z + radius * std::cos(angle));
@@ -356,8 +390,10 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
             items.push_back(Segment(onCircle(c, radius, a0, x), onCircle(c, radius, a1, x), 0.012f, kRope));
         }
     };
-    for (float dx : {-0.07f, 0.0f, 0.07f}) {
-        float x = sheave.x + dx;
+    const int ropes = L.elevator.hoistRopeCount;
+    const float ropePitch = 0.045f;   // groove spacing across the sheave face
+    for (int i = 0; i < ropes; ++i) {
+        float x = sheave.x + (i - (ropes - 1) * 0.5f) * ropePitch;
         items.push_back(Segment(onCircle(sheave, r, 0.0f, x), {x, carHitch, L.carCenterZ}, 0.012f, kRope));
         arc(sheave, r, 0.0f, tangent, x);
         items.push_back(Segment(onCircle(sheave, r, tangent, x), onCircle(deflector, rd, tangent, x), 0.012f, kRope));
@@ -365,8 +401,16 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
         items.push_back(Segment(onCircle(deflector, rd, sim::kPi, x), {x, cwtHitch, L.cwtCenterZ}, 0.012f, kRope));
     }
 
+    // Rope brake: the ascending car overspeed protection. Two jaws sit around
+    // the car-side ropes just under the machine-room slab and clamp them if the
+    // governor trips while the car is moving up.
+    glm::vec3 jawColor = car.StoppedBy() == sim::StoppingDevice::RopeBrake ? kFault : kGovernor;
+    for (float side : {-1.0f, 1.0f})
+        items.push_back(Box({sheave.x, floorY - 0.45f, L.carCenterZ + side * 0.07f}, {0.36f, 0.22f, 0.06f}, jawColor));
+
     // Overspeed governor: its rope loop is clamped to the car, so the governor
     // sheave spins at car speed. A tension pulley in the pit keeps the loop taut.
+    // The clamp and the safety-gear linkage on the car are drawn in AddCar.
     const float govR = L.GovernorRadius();
     const glm::vec3 gov = L.GovernorCenter(car.Id());
     glm::vec3 govColor = car.Safety().governorOk ? kGovernor : kFault;
@@ -378,7 +422,7 @@ void SceneBuilder::AddMachine(const sim::Car& car, std::vector<DrawItem>& items)
     items.push_back(Segment({gov.x - 0.04f, pitPulleyY, gov.z}, {gov.x + 0.04f, pitPulleyY, gov.z}, govR, kSteelDark));
 
     // Controller cabinet with a status lamp.
-    glm::vec3 cabinet(sheave.x, roofY + 1.0f, L.backZ + 0.35f);
+    glm::vec3 cabinet(sheave.x, floorY + 1.0f, L.backZ + 0.35f);
     items.push_back(Box(cabinet, {0.8f, 2.0f, 0.45f}, {0.82f, 0.82f, 0.80f}));
     glm::vec3 lamp = car.mode == sim::CarMode::OutOfService ? kFault
                    : car.IsRunning() ? kLampUp : kButtonLit;
@@ -447,8 +491,8 @@ void SceneBuilder::AddPit(const sim::Car& car, std::vector<DrawItem>& items) con
         items.push_back(Segment({x, bodyTop, z}, {x, top - 0.03f, z}, 0.06f, kStainless));
         items.push_back(Segment({x, top - 0.03f, z}, {x, top, z}, 0.11f, {0.1f, 0.1f, 0.1f}));
     };
-    buffer(L.carCenterZ, -0.5f);    // 0.32 m run-by below the car at the bottom landing
-    buffer(L.cwtCenterZ, -0.9f);    // 0.30 m run-by below the counterweight at its lowest
+    buffer(L.carCenterZ, L.CarBufferTopY());            // one run-by below the car at the bottom landing
+    buffer(L.cwtCenterZ, L.CounterweightBufferTopY());  // one run-by below the counterweight at its lowest
 }
 
 void SceneBuilder::AddLandings(const sim::ElevatorSystem& system, bool xray, std::vector<DrawItem>& items) const {

@@ -96,7 +96,9 @@ SuspensionLoads Car::Suspension() const {
     const float chain = m_spec.compensated ? m_spec.compensationMassPerM : 0.0f;
 
     // Hoist rope hangs from the sheave down to the car (long when the car is
-    // low) and down to the counterweight (long when the car is high).
+    // low) and down to the counterweight (long when the car is high). The same
+    // headroom is used on both sides; the short fixed lengths over the sheaves
+    // differ by a few kilograms, which is ignored.
     float ropeCarSide = rope * (m_spec.ropeHeadroom + travel - y);
     float ropeCwtSide = rope * (m_spec.ropeHeadroom + y);
     // Compensation chain hangs from the underside of each into the pit, so it
