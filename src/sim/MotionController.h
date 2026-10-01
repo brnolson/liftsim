@@ -7,7 +7,6 @@ struct MotionLimits {
     float maxAccel      = 1.0f;    // m/s^2
     float maxJerk       = 1.5f;    // m/s^3
     float levelingSpeed = 0.03f;   // m/s
-    float stopTolerance = 0.003f;  // m
 };
 
 // Moves the car along the hoistway the way a real elevator drive does:
@@ -17,13 +16,16 @@ struct MotionLimits {
 //      with feed-forward from the profile so it tracks without lag.
 //   3. Jerk limiter: acceleration may only change at maxJerk. This is what
 //      passengers perceive as a smooth ride.
+//   4. Final stop: from creep speed, a short jerk-limited ramp brings the car
+//      to exactly zero speed at the floor; only then does the brake drop.
 class MotionController {
 public:
     enum class Mode {
         Stopped,        // brake applied
-        Profile,        // normal run toward a target position
+        Profile,        // normal run toward a target position (stages 1-3)
+        FinalStop,      // ramping creep speed down to zero at the floor (stage 4)
         Uncontrolled,   // injected drive fault: acceleration no longer regulated
-        EmergencyStop   // safety gear or brake: constant retardation to zero
+        EmergencyStop   // safety gear or a brake: constant retardation to zero
     };
 
     explicit MotionController(const MotionLimits& limits = {}) : m_limits(limits) {}
@@ -45,7 +47,9 @@ public:
     const MotionLimits& Limits() const { return m_limits; }
 
     // Distance travelled while decelerating from `speed` to rest with an
-    // S-curve: v^2 / (2A) + v*A / (2J).
+    // S-curve: v^2 / (2A) + v*A / (2J). Exact when the deceleration reaches A,
+    // i.e. for v >= A^2/J (about 0.6 m/s here); below that it overestimates,
+    // which errs on the safe side for "can the car still stop there?".
     static float StoppingDistance(float speed, float accel, float jerk);
     // Inverse of StoppingDistance: the fastest speed that can still stop
     // within `distance`.
@@ -55,6 +59,8 @@ public:
 
 private:
     void UpdateProfile(float dt);
+    void BeginFinalStop(float speed, float dir, float dt);
+    void UpdateFinalStop(float dt);
     void SlewAcceleration(float accelRequest, float dt);
     void Integrate(float dt);
     float PatternSpeed(float distToGo) const;
@@ -66,6 +72,10 @@ private:
     float m_forcedAccel = 0.0f;
     float m_emergencyDecel = 0.0f;
     float m_lastStopError = 0.0f;
+
+    // Final-stop ramp (see BeginFinalStop).
+    int   m_stopStep = 0, m_stopSteps = 0;
+    float m_stopJerk = 0.0f;   // signed: along the direction of travel
 };
 
 }  // namespace sim

@@ -19,7 +19,6 @@ struct ElevatorSpec {
     float maxAccel      = 1.0f;    // m/s^2
     float maxJerk       = 1.5f;    // m/s^3
     float levelingSpeed = 0.03f;   // m/s  final creep into the landing
-    float stopTolerance = 0.003f;  // m    brake drops inside this window
 
     // --- Masses ---
     float carMassKg        = 1800.0f;

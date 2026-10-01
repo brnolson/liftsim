@@ -31,8 +31,7 @@ static void Test(const char* name, const std::function<void()>& body) {
 int main() {
     const ElevatorSpec spec;
     const BuildingSpec building;
-    const MotionLimits limits{spec.ratedSpeed, spec.maxAccel, spec.maxJerk,
-                              spec.levelingSpeed, spec.stopTolerance};
+    const MotionLimits limits{spec.ratedSpeed, spec.maxAccel, spec.maxJerk, spec.levelingSpeed};
 
     Test("REQ-MOT-01/02/03  Every trip within speed, accel and jerk limits; levels within +/-10 mm; no overshoot", [&] {
         for (int floors = 1; floors < building.floorCount; ++floors) {

@@ -17,7 +17,7 @@ const char* ToString(CarMode mode) {
 }
 
 static MotionLimits LimitsFrom(const ElevatorSpec& s) {
-    return {s.ratedSpeed, s.maxAccel, s.maxJerk, s.levelingSpeed, s.stopTolerance};
+    return {s.ratedSpeed, s.maxAccel, s.maxJerk, s.levelingSpeed};
 }
 
 Car::Car(int id, const ElevatorSpec& spec, const BuildingSpec& building)
@@ -196,7 +196,7 @@ int Car::CommittedFloor() const {
     float stopPoint = Position() + (v >= 0.0f ? 1.0f : -1.0f) *
         MotionController::StoppingDistance(v, m_spec.maxAccel * 0.9f, m_spec.maxJerk * 0.9f);
     float floorIndex = stopPoint / m_building.floorHeight;
-    // Round in the direction of travel: we cannot stop at a floor behind the stop point.
+    // Round in the direction of travel: the car cannot stop at a floor behind the stop point.
     int f = static_cast<int>(v >= 0.0f ? std::ceil(floorIndex - 0.01f) : std::floor(floorIndex + 0.01f));
     return std::clamp(f, 0, m_building.floorCount - 1);
 }
