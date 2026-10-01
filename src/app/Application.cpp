@@ -332,7 +332,8 @@ void Application::RenderFrame() {
     ViewOptions viewOptions{m_camera.Position(), m_state.selectedCar, m_state.xray};
     m_sceneBuilder.Build(m_system, viewOptions, m_items, m_rayBoxes);
     m_people.AppendDrawItems(m_meshes, m_items);
-    m_people.AppendRayBoxes(m_camera.Target(), 20, m_rayBoxes);
+    // People are not added to the reflection rays: one box cannot represent an
+    // articulated pose and shows up as a rectangular ghost in mirrors.
     m_environment.AppendRayBoxes(m_rayBoxes);
     m_environment.CollectBatches(m_state.xray, m_batches);
 

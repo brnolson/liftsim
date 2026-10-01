@@ -18,8 +18,6 @@ public:
 
     void Update(const sim::ElevatorSystem& system, float simDt);
     void AppendDrawItems(const MeshLibrary& meshes, std::vector<DrawItem>& items) const;
-    // Adds bounding boxes of the people nearest `focus` to the ray-traced scene.
-    void AppendRayBoxes(const glm::vec3& focus, int maxCount, std::vector<RayBox>& boxes) const;
     int VisibleCount() const { return static_cast<int>(m_people.size()); }
 
 private:

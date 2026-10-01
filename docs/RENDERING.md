@@ -31,7 +31,7 @@ Back-face culling is disabled in this pass so thin panels cast shadows from both
 - **PCF shadows:** the shadow map is a depth texture with `GL_COMPARE_REF_TO_TEXTURE`, so each lookup returns a hardware-filtered 0–1 comparison. Averaging a 3×3 grid of lookups softens the edges.
 - **Hybrid ray-traced reflections** (materials `METAL` and `POLISHED`):
   1. Reflect the view vector about the normal.
-  2. Trace that ray against a live list of up to 64 axis-aligned boxes (cars, counterweights, floor slabs, walls, neighbouring towers and the 20 people nearest the camera target), using the **slab test** (`RayBox`).
+  2. Trace that ray against a live list of up to 64 axis-aligned boxes (cars, counterweights, floor slabs, walls, neighbouring towers), using the **slab test** (`RayBox`). People are deliberately left out: a single box cannot represent a walking pose and appears as a rectangular ghost in mirrors. Per-limb boxes or screen-space reflections would handle them at higher cost.
   3. Shade the nearest hit with its box color, face normal and sun light (one bounce, no shadow ray), or return the sky color on a miss.
   4. Blend with the rasterized color using **Schlick's Fresnel approximation**: stainless steel has a high, albedo-tinted base reflectance (F0 ≈ 0.55), and polished stone about 4 %, so floors only mirror strongly at grazing angles.
 

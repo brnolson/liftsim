@@ -184,18 +184,3 @@ void PeopleView::AppendDrawItems(const MeshLibrary& meshes, std::vector<DrawItem
                          look.hair, Material::Matte, true});
     }
 }
-
-void PeopleView::AppendRayBoxes(const glm::vec3& focus, int maxCount, std::vector<RayBox>& boxes) const {
-    std::vector<std::pair<float, const Person*>> nearest;
-    for (const auto& [id, person] : m_people)
-        nearest.push_back({glm::length(person.position - focus), &person});
-    int count = std::min(maxCount, static_cast<int>(nearest.size()));
-    std::partial_sort(nearest.begin(), nearest.begin() + count, nearest.end(),
-                      [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    for (int i = 0; i < count; ++i) {
-        const Person& p = *nearest[i].second;
-        glm::vec3 half(0.22f, 0.0f, 0.22f);
-        boxes.push_back({{p.position - half, p.position + half + glm::vec3(0.0f, p.look.height, 0.0f)}, p.look.shirt});
-    }
-}
