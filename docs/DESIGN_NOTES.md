@@ -22,29 +22,25 @@
             └────────────────────────────┘
 ```
 
-**Simulation separated from presentation.** The simulation core (`liftsim_core`) is a separate static library with no graphics dependency, and the view layer only reads from it. This means:
+### Simulation separate from presentation
 
-- The physics and control logic are **unit-tested headless** and **deterministic**: same seed, same step, same result.
-- A simulated hour runs in a fraction of a second, which makes KPI studies practical (below).
-- The renderer can be replaced or removed without touching the logic.
+The simulation core (`liftsim_core`) is a static library with no graphics dependency, and the view layer only reads from it. The physics and control logic can therefore be tested headless, and they are deterministic: same seed, same step, same result. A simulated hour runs in a fraction of a second, which is what makes the KPI study below practical. The renderer could be replaced without touching the logic.
 
-**Fixed timestep.** The simulation always advances in 1/120 s steps and an accumulator carries leftover frame time forward. Physics results therefore do not depend on the frame rate, and 32× fast-forward is 32× more steps rather than bigger, less accurate ones.
+### Fixed timestep
 
-**One source of truth for geometry.** Every world-space position (shaft centers, sheave location, counterweight travel) comes from `BuildingLayout`. The scene, people, picking and HUD labels cannot disagree about where something is.
+The simulation always advances in 1/120 s steps and an accumulator carries leftover frame time forward. Physics results therefore do not depend on the frame rate, and 32× fast-forward is 32× more steps rather than bigger, less accurate ones.
 
-**Procedural models.** Every mesh is built in code from three unit primitives (cube, sphere, cylinder) transformed by model matrices. There are no asset files to license or load, and every vertex on screen can be traced to a line of code.
+### One source of truth for geometry
+
+Every world-space position (shaft centers, sheave location, counterweight travel) comes from `BuildingLayout`. The scene, people, picking and HUD labels cannot disagree about where something is.
+
+### Procedural models
+
+Every mesh is built in code from three unit primitives (cube, sphere, cylinder) transformed by model matrices, so there are no asset files to license or load.
 
 ## Verification
 
-Requirements are listed with their sources in [REQUIREMENTS.md](REQUIREMENTS.md). `tests/SimTests.cpp` verifies each one by ID, and CI runs the tests on every push. The tests check:
-
-- the motion limits and leveling accuracy for every possible trip in both directions;
-- safety interlocks (no motion with doors open);
-- governor trips in both directions (rope brake going up, safety gear going down) and UCM stopped by the machine brake within 1.2 m;
-- no rope slip at full load, using the geometric wrap angle;
-- compensation chains cancelling the rope imbalance;
-- energy regeneration;
-- passenger conservation over an hour of mixed traffic (nobody stranded, no overload).
+Requirements are listed with their sources in [REQUIREMENTS.md](REQUIREMENTS.md). `tests/SimTests.cpp` verifies each one by ID, and CI runs the tests on every push.
 
 ## Findings from the simulation
 
@@ -62,7 +58,7 @@ Thirty minutes of simulated traffic per case, 4 cars, 24 upper floors (`./build/
 | Interfloor | 60 | 89.4 s | 306 s | 153.2 s | 28 |
 | Down-peak | 60 | 57.5 s | 162 s | 108.6 s | 30 |
 
-**In up-peak the group saturates between about 60 and 90 persons per 5 minutes, 6–9 % of the 960-person population.** At 60 the average wait is still acceptable; at 90 it triples and queues build.
+In up-peak the group saturates between about 60 and 90 persons per 5 minutes, 6–9 % of the 960-person population. At 60 the average wait is still acceptable; at 90 it triples and queues build.
 
 A hand calculation of the up-peak round-trip time (Barney & Al-Sharif; CIBSE Guide D) agrees:
 
@@ -82,7 +78,7 @@ A hand calculation of the up-peak round-trip time (Barney & Al-Sharif; CIBSE Gui
 
 The formula assumes every car leaves the lobby 80 % full, so it is an upper bound; in the simulation cars leave as soon as boarding stops, which explains saturation starting somewhat lower.
 
-Office guidance has traditionally targeted an up-peak handling capacity of 12–15 % per 5 minutes and an interval of about 30 s; more recent surveys show mixed lunchtime traffic is often the busiest period, which is why the lunch pattern is studied too. Either way, four cars fall well short. **A 25-storey office tower needs about 6 cars or a low-rise/high-rise zoned split.** This is the kind of result a traffic analysis exists to produce, and why the simulator measures KPIs rather than just animating.
+Office guidance has traditionally targeted an up-peak handling capacity of 12–15 % per 5 minutes and an interval of about 30 s; more recent surveys show mixed lunchtime traffic is often the busiest period, which is why the lunch pattern is studied too. Either way, four cars fall well short: a 25-storey office tower needs about six cars, or a split into low-rise and high-rise zones.
 
 ## Simplifications (and what a production model would add)
 

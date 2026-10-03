@@ -21,8 +21,4 @@ Each requirement has an ID, the source it is derived from, and the test that ver
 
 EN 81-50's emergency-braking and stalled traction cases are not modelled, so there is no requirement for them.
 
-This mirrors how regulated software is developed (for example IEC 62304 for medical device software):
-
-- requirements are written down with a rationale;
-- every requirement has a verification;
-- the link between the two is traceable in both directions.
+The table follows the traceability practice of IEC 62304 (medical device software): each requirement has a written source and a verification, and either can be traced to the other.

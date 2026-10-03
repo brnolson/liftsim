@@ -1,8 +1,8 @@
 # LiftSim
 
-**Real-time 3D simulation of a traction elevator group, written from scratch in C++17 and OpenGL 4.6.**
+A real-time 3D simulation of a traction elevator group, in C++17 and OpenGL 4.6.
 
-LiftSim models a 25-storey office tower served by four 2.5 m/s gearless traction elevators. The physics, dispatching and safety logic run in a deterministic, unit-tested simulation core. A hybrid rasterization and ray-tracing renderer visualizes it with passengers who queue, board and ride.
+LiftSim models a 25-storey office tower served by four 2.5 m/s gearless traction elevators. The physics, dispatching and safety logic run in a deterministic simulation core with unit tests. The renderer rasterizes the scene and ray-traces reflections on metal and polished surfaces; passengers walk to the hall buttons, queue, board and ride.
 
 ![Overview](docs/images/overview.png)
 
@@ -18,19 +18,19 @@ LiftSim models a 25-storey office tower served by four 2.5 m/s gearless traction
 
 | Subsystem | Model |
 |---|---|
-| **Motion** | Jerk-limited S-curve profile generator driven by distance-to-go, a speed regulator with feed-forward and look-ahead, and a jerk limiter. Every trip stays within 2.5 m/s, 1.0 m/s² and 1.5 m/s³ and, after a jerk-limited final stop, lands within 0.3 mm (EN 81-20 requires ±10 mm). |
-| **Traction drive** | Rope tensions on both sides of the sheave, including hoist-rope, compensation-chain and traveling-cable masses at the current car position; machine torque and power; energy drawn and regenerated; and a rope-slip check with the Euler–Eytelwein (capstan) equation for normal operation, using a wrap angle computed from the sheave and deflector geometry (158°). |
-| **Compensation** | Over 86 m of travel the hoist ropes alone swing the balance by about 600 kg. Chains hung under the car and counterweight cancel it (a unit test shows 554 kg reduced to 48 kg). |
-| **Hoistway** | Oil buffers with the EN 81-20 minimum stroke `0.0674·v²` (0.42 m at 2.5 m/s). Overhead, pit depth and counterweight clearances are derived from the buffer stroke, run-by and EN 81 clearance rules. |
-| **Doors** | Center-opening operator with eased panel motion. The car door drives the landing door through a coupler. A light curtain reopens the doors while closing. |
-| **Safety chain** | Door interlocks, an overspeed governor (trips at 115 % of rated speed: the safety gear stops a descending car, a rope brake an ascending one), and unintended car movement (UCM) detection with the machine brake stopping the car within 1.2 m. The drive only runs with the chain closed. |
-| **Group control** | Selective collective control (SCAN) per car. Hall calls are assigned by estimated time of arrival (ETA) and reallocated dynamically. Full cars (>80 %) bypass hall calls, and idle cars park at the lobby during up-peak. |
-| **Traffic** | Poisson passenger arrivals for up-peak, down-peak, lunch and interfloor patterns. KPIs: average and maximum wait, journey time, % of waits over 60 s, energy. |
-| **Fault injection** | Press `O` to lose drive control: the car freewheels toward the heavier side until the governor trips. An empty car rises and the rope brake stops it; a full car falls and the safety gear stops it. Press `R` to reset and run a rescue relevel. |
+| Motion | Jerk-limited S-curve profile generator driven by distance-to-go, a speed regulator with feed-forward and look-ahead, and a jerk limiter. Every trip stays within 2.5 m/s, 1.0 m/s² and 1.5 m/s³ and, after a jerk-limited final stop, lands within 0.3 mm (EN 81-20 requires ±10 mm). |
+| Traction drive | Rope tensions on both sides of the sheave, including hoist-rope, compensation-chain and traveling-cable masses at the current car position; machine torque and power; energy drawn and regenerated; and a rope-slip check with the Euler–Eytelwein (capstan) equation for normal operation, using a wrap angle computed from the sheave and deflector geometry (158°). |
+| Compensation | Over 86 m of travel the hoist ropes alone swing the balance by about 600 kg. Chains hung under the car and counterweight cancel it (a unit test shows 554 kg reduced to 48 kg). |
+| Hoistway | Oil buffers with the EN 81-20 minimum stroke `0.0674·v²` (0.42 m at 2.5 m/s). Overhead, pit depth and counterweight clearances are derived from the buffer stroke, run-by and EN 81 clearance rules. |
+| Doors | Center-opening operator with eased panel motion. The car door drives the landing door through a coupler. A light curtain reopens the doors while closing. |
+| Safety chain | Door interlocks, an overspeed governor (trips at 115 % of rated speed: the safety gear stops a descending car, a rope brake an ascending one), and unintended car movement (UCM) detection with the machine brake stopping the car within 1.2 m. The drive only runs with the chain closed. |
+| Group control | Selective collective control (SCAN) per car. Hall calls are assigned by estimated time of arrival (ETA) and reallocated dynamically. Full cars (>80 %) bypass hall calls, and idle cars park at the lobby during up-peak. |
+| Traffic | Poisson passenger arrivals for up-peak, down-peak, lunch and interfloor patterns. KPIs: average and maximum wait, journey time, % of waits over 60 s, energy. |
+| Fault injection | Press `O` to lose drive control: the car freewheels toward the heavier side until the governor trips. An empty car rises and the rope brake stops it; a full car falls and the safety gear stops it. Press `R` to reset and run a rescue relevel. |
 
 ## Component inspector and sources
 
-Press **Tab** to walk through each component with a close-up camera that tracks it while it moves:
+Press `Tab` to step through the components with a close-up camera that tracks it while it moves:
 
 - traction machine
 - hoist ropes
@@ -41,7 +41,7 @@ Press **Tab** to walk through each component with a close-up camera that tracks 
 - buffers
 - dispatch
 
-Each card explains the part and shows its live values, its governing equation, and clickable links to the standards and papers it is based on. Press **I** to see the full reference list.
+Each card explains the part and shows its live values, its governing equation, and clickable links to the standards and papers it is based on. `I` shows the full reference list.
 
 ## Requirements and verification
 
@@ -49,14 +49,14 @@ Every simulation requirement has an ID, a source, and a verifying test ([docs/RE
 
 ## Rendering
 
-- **Three-pass pipeline:** sun shadow map, then a forward scene pass into an HDR G-buffer (color + normals), then post-processing.
-- **Toon shading** with hemisphere ambient, **PCF soft shadows**, and **ink outlines** from depth and normal discontinuities.
-- **Hybrid ray tracing:** metal and polished surfaces trace a reflection ray in the fragment shader against a live box scene (cars, counterweights, slabs, nearby towers) using the slab test, with Schlick Fresnel weighting.
-- **Ray picking:** clicking the screen casts a ray to select a car or call a car to a floor. It uses the same slab algorithm on the CPU.
-- **Procedural animation:** passengers are forward-kinematics skeletons with a distance-driven walk cycle (no foot sliding). Sheaves, deflectors and governors spin at the true rope speed. The traveling cable's U-loop is solved from its fixed length.
-- **Dollhouse cut-away:** walls facing the camera are culled so the building always opens toward the viewer. X-ray mode strips the architecture down to the equipment.
-- **GPU instancing:** the surrounding city (172 towers, 1,100 street trees, road markings and indoor plants on every floor, about 8,000 instances) is drawn with 13 instanced draw calls.
-- **Procedural textures, no image files:** concrete, terrazzo, carpet tiles, wood grain, brushed steel, asphalt, grass and window facades are generated in the shader from 3D noise and box projection. Detail is anti-aliased with `fwidth`.
+- Three passes: sun shadow map, then a forward scene pass into an HDR G-buffer (color + normals), then post-processing.
+- Toon shading with hemisphere ambient, PCF soft shadows, and ink outlines from depth and normal discontinuities.
+- Ray-traced reflections: metal and polished surfaces trace a reflection ray in the fragment shader against a live box scene (cars, counterweights, slabs, nearby towers) using the slab test, with Schlick Fresnel weighting.
+- Picking: clicking the screen casts a ray to select a car or call a car to a floor. It uses the same slab algorithm on the CPU.
+- Passengers are forward-kinematics skeletons with a distance-driven walk cycle (no foot sliding). Sheaves, deflectors and governors spin at the true rope speed. The traveling cable's U-loop is solved from its fixed length.
+- Dollhouse cut-away: walls facing the camera are culled so the building always opens toward the viewer. X-ray mode strips the architecture down to the equipment.
+- GPU instancing: the surrounding city (172 towers, 1,100 street trees, road markings and indoor plants on every floor, about 8,000 instances) is drawn with 13 instanced draw calls.
+- Procedural textures with no image files: concrete, terrazzo, carpet tiles, wood grain, brushed steel, asphalt, grass and window facades are generated in the shader from 3D noise and box projection. Detail is anti-aliased with `fwidth`.
 - ACES tone mapping, aerial fog, gamma correction.
 
 ## Build
