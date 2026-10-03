@@ -66,6 +66,11 @@ void Hud::Draw(const sim::ElevatorSystem& system, const BuildingLayout& layout, 
     m_title.BeginFrame(width, height);
 
     DrawWorldLabels(system, layout, viewProj, width, height);
+    DrawMinimizeButton(state.minimized, width);
+    if (state.minimized) {
+        m_text.EndFrame();
+        return;
+    }
 
     float top = static_cast<float>(height) - 16.0f;
     DrawHeader(system, state, 16.0f, top);
@@ -93,6 +98,21 @@ const char* Hud::LinkAt(float x, float y) const {
     for (const Link& link : m_links)
         if (x >= link.x0 && x <= link.x1 && y >= link.y0 && y <= link.y1) return link.url;
     return nullptr;
+}
+
+bool Hud::MinimizeButtonAt(float x, float y) const {
+    const Link& b = m_minimizeButton;
+    return x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+}
+
+// Sits just above the controls bar at the bottom-right, clear of every panel.
+void Hud::DrawMinimizeButton(bool minimized, int width) {
+    const char* label = minimized ? "[+] Show panels (M)" : "[-] Hide panels (M)";
+    float w = m_text.MeasureText(label, 0.9f) + 20.0f, h = 26.0f;
+    float x = static_cast<float>(width) - w - 16.0f, y = 46.0f;
+    Panel(x, y, w, h);
+    m_text.DrawText(label, x + 10.0f, y + 8.0f, 0.9f, kWhite);
+    m_minimizeButton = {x, y, x + w, y + h, nullptr};
 }
 
 void Hud::DrawSourceLink(const char* id, float x, float y, float maxWidth) {
@@ -289,7 +309,7 @@ void Hud::DrawControls(int width, float y) {
     const char* help =
         "LMB drag orbit | RMB drag pan | Wheel zoom | Click car: select, click floor: call | "
         "Tab inspect components | I references | F1-F6 views | 1-9 car | F follow | Space pause | [ ] speed | T traffic | +/- rate | "
-        "O drive fault | R reset | X x-ray | G reflections | J shadows | K outlines | H hide HUD";
+        "O drive fault | R reset | X x-ray | G reflections | J shadows | K outlines | M minimize | H hide HUD";
     float w = m_text.MeasureText(help, 0.85f);
     float x = std::max(8.0f, (width - w) * 0.5f);
     m_text.DrawRect(x - 8.0f, y - 6.0f, w + 16.0f, 22.0f, {0.05f, 0.07f, 0.10f}, 0.7f);

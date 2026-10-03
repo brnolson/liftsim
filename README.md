@@ -87,6 +87,7 @@ The first configure downloads SDL2 and GLM with CMake FetchContent. To build onl
 | `T`, `+` `-` | Traffic pattern, arrival rate |
 | `O`, `R` | Inject drive fault, reset car |
 | `X`, `G`, `J`, `K`, `H` | X-ray, ray-traced reflections, shadows, outlines, HUD |
+| `M` or the bottom-right button | Minimize the HUD panels (labels stay) |
 
 ## Code map
 

@@ -208,6 +208,7 @@ void Application::HandleKey(const SDL_KeyboardEvent& key) {
     case SDLK_j:            m_state.shadows = !m_state.shadows; break;
     case SDLK_k:            m_state.outlines = !m_state.outlines; break;
     case SDLK_h:            m_showHud = !m_showHud; break;
+    case SDLK_m:            m_state.minimized = !m_state.minimized; break;
     default:
         if (k >= SDLK_1 && k <= SDLK_9 && k - SDLK_1 < cars) {
             m_state.selectedCar = k - SDLK_1;
@@ -226,7 +227,12 @@ void Application::HandleClick(int mouseX, int mouseY) {
 
     // HUD source links first (HUD pixels have their origin at the bottom-left).
     float scale = static_cast<float>(m_width) / windowW;
-    if (const char* url = m_hud.LinkAt(mouseX * scale, m_height - mouseY * scale)) {
+    float hudX = mouseX * scale, hudY = m_height - mouseY * scale;
+    if (m_showHud && m_hud.MinimizeButtonAt(hudX, hudY)) {
+        m_state.minimized = !m_state.minimized;
+        return;
+    }
+    if (const char* url = m_hud.LinkAt(hudX, hudY)) {
         SDL_OpenURL(url);
         return;
     }

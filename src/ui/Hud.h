@@ -18,6 +18,7 @@ struct HudState {
     bool  outlines = true;
     bool  xray = false;
     bool  showReferences = false;
+    bool  minimized = false;   // panels collapsed to a single button
     float fps = 0.0f;
     int   drawCalls = 0;
 };
@@ -36,6 +37,8 @@ public:
 
     // URL of the source link under a point in HUD pixels (origin bottom-left), if any.
     const char* LinkAt(float x, float y) const;
+    // True if a point in HUD pixels is on the minimize/restore button.
+    bool MinimizeButtonAt(float x, float y) const;
 
 private:
     struct Sample { float time, speed, accel; };
@@ -51,6 +54,7 @@ private:
     void DrawInspectorCard(const Inspector::Card& card, const glm::vec2* anchor, float x, float y);
     void DrawReferences(int width, int height);
     void DrawSourceLink(const char* id, float x, float y, float maxWidth);
+    void DrawMinimizeButton(bool minimized, int width);
     void Panel(float x, float y, float w, float h);
 
     struct Link { float x0, y0, x1, y1; const char* url; };
@@ -58,6 +62,7 @@ private:
     TextRenderer m_text;    // monospace, for data
     TextRenderer m_title;   // proportional, for headings
     std::vector<Link> m_links;   // rebuilt every frame
+    Link m_minimizeButton{};     // its url is unused
     std::deque<Sample> m_trace;
     int m_traceCar = -1;
     float m_lastSampleTime = -1.0f;
